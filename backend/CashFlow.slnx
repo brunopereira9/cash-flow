@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/Core/" />
+  <Folder Name="/Core/src/">
+    <Project Path="Core/src/Core.Api/Core.Api.csproj" />
+  </Folder>
+  <Folder Name="/Core/tests/">
+    <Project Path="Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj" />
+    <Project Path="Core/tests/Core.UnitTests/Core.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/Summary/" />
+  <Folder Name="/Summary/src/">
+    <Project Path="Summary/src/Summary.Api/Summary.Api.csproj" />
+  </Folder>
+  <Folder Name="/Summary/tests/">
+    <Project Path="Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj" />
+    <Project Path="Summary/tests/Summary.UnitTests/Summary.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ArchitectureTests/ArchitectureTests.csproj" />
+  </Folder>
+</Solution>

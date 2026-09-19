@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+front/node_modules/
+front/dist/
+.env
+.env.*
+!.env.example
