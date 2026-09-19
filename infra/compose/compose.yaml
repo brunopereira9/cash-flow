@@ -1,0 +1,39 @@
+services:
+  core:
+    build: ../../backend/Core/src/Core.Api
+    ports: ["5080:8080"]
+    environment:
+      ConnectionStrings__Core: Host=postgres;Database=core_db;Username=cashflow;Password=local
+      RabbitMq__Enabled: "true"
+      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+    depends_on: [postgres, rabbitmq]
+  summary:
+    build: ../../backend/Summary/src/Summary.Api
+    ports: ["5081:8080"]
+    environment:
+      ConnectionStrings__Summary: Host=postgres;Database=summary_db;Username=cashflow;Password=local
+      RabbitMq__Enabled: "true"
+      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+    depends_on: [postgres, rabbitmq]
+  frontend:
+    build: ../../front
+    ports: ["5173:80"]
+  postgres:
+    image: postgres:16-alpine
+    volumes: ["../../infra/postgres:/docker-entrypoint-initdb.d:ro"]
+    environment: { POSTGRES_PASSWORD: local, POSTGRES_USER: cashflow }
+  rabbitmq: { image: rabbitmq:3-management-alpine }
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    volumes: ["../../infra/keycloak:/opt/keycloak/data/import:ro"]
+    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: username123, KC_DB: postgres, KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db, KC_DB_USERNAME: cashflow, KC_DB_PASSWORD: local }
+  collector: { image: otel/opentelemetry-collector:latest }
+  load:
+    image: grafana/k6:0.54.0
+    profiles: ["load"]
+    entrypoint: []
+    working_dir: /workspace
+    volumes: ["../../:/workspace:ro", "../../infra/load:/scripts:ro"]
+    command: ["k6", "run", "/scripts/daily-summary-50rps.js"]
+    depends_on: [summary]

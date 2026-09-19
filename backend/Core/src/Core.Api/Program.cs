@@ -1,107 +1,50 @@
-using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<LedgerStore>();
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o => { o.Authority = builder.Configuration["Keycloak:Authority"]; o.Audience = builder.Configuration["Keycloak:Audience"] ?? "cashflow"; o.RequireHttpsMetadata = false; });
+builder.Services.AddAuthorization();
+var connection = builder.Configuration.GetConnectionString("Core") ?? "Host=postgres;Database=core_db;Username=cashflow;Password=local";
+if (builder.Configuration["Database:Provider"] == "Sqlite") builder.Services.AddDbContext<CoreDbContext>(o => o.UseSqlite(connection)); else builder.Services.AddDbContext<CoreDbContext>(o => o.UseNpgsql(connection));
+builder.Services.AddHostedService<RabbitOutboxRelay>();
 var app = builder.Build();
-string Correlation(HttpContext context) => context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
-
-app.Use(async (context, next) =>
-{
-    context.Response.Headers["X-Correlation-Id"] = context.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
-    await next();
-});
-
+using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<CoreDbContext>().Database.EnsureCreatedAsync();
+app.UseCors(); if (builder.Configuration.GetValue("Keycloak:Enabled", false)) { app.UseAuthentication(); app.UseAuthorization(); }
+app.Use(async (ctx, next) => { ctx.Response.Headers["X-Correlation-Id"] = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N"); await next(); });
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
-
-app.MapPost("/ledger/entries", (CreateEntryRequest request, HttpContext http, LedgerStore store) =>
+if (builder.Configuration.GetValue("Keycloak:Enabled", false)) app.MapMethods("/ledger/{**path}", ["GET", "POST", "PUT", "DELETE"], () => Results.Unauthorized()).RequireAuthorization();
+app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
 {
-    var actor = http.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? "demo-operator";
-    var attemptKey = http.Request.Headers["Idempotency-Key"].FirstOrDefault();
-    if (string.IsNullOrWhiteSpace(attemptKey)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["Idempotency-Key"] = ["required"] });
-
-    var validation = EntryValidation.Validate(request);
-    if (validation.Count > 0) return Results.ValidationProblem(validation);
-    var businessDate = request.BusinessDate ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
-    var intent = $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{businessDate:yyyy-MM-dd}";
-    var existing = store.FindAttempt(actor, attemptKey);
-    if (existing is not null)
-    {
-        if (existing.Intent != intent) return Results.Conflict(new { code = "idempotency_conflict" });
-        return Results.Ok(existing.Entry);
-    }
-
-    var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, businessDate, 1, false);
-    store.Add(entry, actor, attemptKey, intent, Correlation(http));
+    var errors = EntryValidation.Validate(request); var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault(); if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"]; if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
+    var actor = Actor(http); var date = request.BusinessDate ?? Today(); var intent = $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
+    var old = await db.CreationAttempts.Include(x => x.Entry).SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token); if (old is not null) return old.Intent == intent ? Results.Ok(old.Entry) : Results.Conflict(new { code = "idempotency_conflict" });
+    var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1, false);
+    await using var transaction = await db.Database.BeginTransactionAsync(token); db.LedgerEntries.Add(entry); db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry }); AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token);
     return Results.Created($"/ledger/entries/{entry.Id}", entry);
 });
-
-app.MapGet("/ledger/entries", (LedgerStore store) => Results.Ok(store.Entries.Where(x => !x.Deleted)));
-
-app.MapPut("/ledger/entries/{id:guid}", (Guid id, UpdateEntryRequest request, HttpContext http, LedgerStore store) =>
+app.MapGet("/ledger/entries", async (CoreDbContext db, CancellationToken token) => Results.Ok(await db.LedgerEntries.Where(x => !x.Deleted).OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token)));
+app.MapPut("/ledger/entries/{id:guid}", async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
 {
-    var current = store.Get(id);
-    if (current is null || current.Deleted) return Results.NotFound();
-    if (request.Version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
-    var errors = EntryValidation.Validate(request);
-    if (errors.Count > 0) return Results.ValidationProblem(errors);
-    var updated = current with { Amount = request.Amount, Type = request.Type!, Description = request.Description!, BusinessDate = request.BusinessDate ?? current.BusinessDate, Version = current.Version + 1 };
-    store.Update(updated, http.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? "demo-operator", Correlation(http));
-    return Results.Ok(updated);
+    var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token); if (current is null || current.Deleted) return Results.NotFound(); if (request.Version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version }); var errors = EntryValidation.Validate(request); if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
+    current.Amount = request.Amount; current.Type = request.Type!; current.Description = request.Description!; current.BusinessDate = request.BusinessDate ?? current.BusinessDate; current.Version++;
+    await using var transaction = await db.Database.BeginTransactionAsync(token); AddMutation(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); return Results.Ok(current);
 });
-
-app.MapDelete("/ledger/entries/{id:guid}", (Guid id, int version, HttpContext http, LedgerStore store) =>
+app.MapDelete("/ledger/entries/{id:guid}", async (Guid id, int version, HttpContext http, CoreDbContext db, CancellationToken token) =>
 {
-    var current = store.Get(id);
-    if (current is null || current.Deleted) return Results.NotFound();
-    if (version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
-    store.Update(current with { Deleted = true, Version = current.Version + 1 }, http.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? "demo-operator", Correlation(http));
-    return Results.NoContent();
+    var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token); if (current is null || current.Deleted) return Results.NotFound(); if (version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version }); current.Deleted = true; current.Version++;
+    await using var transaction = await db.Database.BeginTransactionAsync(token); AddMutation(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); return Results.NoContent();
 });
-
-app.MapGet("/audit", (LedgerStore store) => Results.Ok(store.Audit));
-
+app.MapGet("/audit", async (CoreDbContext db, CancellationToken token) => Results.Ok((await db.AuditRecords.ToListAsync(token)).OrderBy(x => x.At)));
 app.Run();
-
+static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, string actor, string correlation, string name)
+{ db.AuditRecords.Add(new AuditRecord { EntryId = entry.Id, Action = action, ActorId = actor, CorrelationId = correlation }); var eventId = Guid.NewGuid(); var payload = JsonSerializer.Serialize(new LedgerEventEnvelope(eventId, name, entry.Version, new(entry.Id, entry.Amount, entry.Type, entry.Description, entry.BusinessDate, entry.Version, entry.Deleted))); db.OutboxEvents.Add(new OutboxEvent { EventId = eventId, Name = name, Version = entry.Version, Payload = payload }); }
+static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? "demo-operator";
+static string Correlation(HttpContext context) => context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
 public partial class Program;
-
-record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
-record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);
-record LedgerEntry(Guid Id, decimal Amount, string Type, string Description, DateOnly BusinessDate, int Version, bool Deleted);
-record AuditRecord(Guid EntryId, string Action, string ActorId, string CorrelationId, DateTimeOffset At);
-record CreationAttempt(string ActorId, string Key, string Intent, LedgerEntry Entry);
-
-static partial class EntryValidation
-{
-    public static Dictionary<string, string[]> Validate(dynamic request)
-    {
-        var errors = new Dictionary<string, string[]>();
-        if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount) errors["Amount"] = ["must be positive with at most two decimal places"];
-        if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"];
-        if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"];
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
-        if (request.BusinessDate is DateOnly date && date > today) errors["BusinessDate"] = ["cannot be in the future"];
-        return errors;
-    }
-}
-
-sealed class LedgerStore
-{
-    private readonly ConcurrentDictionary<Guid, LedgerEntry> entries = new();
-    private readonly ConcurrentDictionary<string, CreationAttempt> attempts = new();
-    public List<AuditRecord> Audit { get; } = [];
-    public List<object> Outbox { get; } = [];
-    public IEnumerable<LedgerEntry> Entries => entries.Values.OrderBy(x => x.BusinessDate).ThenBy(x => x.Id);
-    public LedgerEntry? Get(Guid id) => entries.TryGetValue(id, out var value) ? value : null;
-    public CreationAttempt? FindAttempt(string actor, string key) => attempts.TryGetValue($"{actor}:{key}", out var value) ? value : null;
-    public void Add(LedgerEntry entry, string actor, string key, string intent, string correlation)
-    {
-        entries[entry.Id] = entry; attempts[$"{actor}:{key}"] = new(actor, key, intent, entry);
-        Audit.Add(new(entry.Id, "created", actor, correlation, DateTimeOffset.UtcNow)); Outbox.Add(new { EventId = Guid.NewGuid(), Name = "LedgerEntryCreated.v1", Entry = entry });
-    }
-    public void Update(LedgerEntry entry, string actor, string correlation)
-    {
-        entries[entry.Id] = entry; var action = entry.Deleted ? "deleted" : "updated";
-        Audit.Add(new(entry.Id, action, actor, correlation, DateTimeOffset.UtcNow)); Outbox.Add(new { EventId = Guid.NewGuid(), Name = $"LedgerEntry{(entry.Deleted ? "Deleted" : "Updated")}.v1", Entry = entry });
-    }
-}
+public record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
+public record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);
+public static class EntryValidation { public static Dictionary<string, string[]> Validate(dynamic request) { var errors = new Dictionary<string, string[]>(); if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount) errors["Amount"] = ["must be positive with at most two decimal places"]; if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"]; if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"]; if (request.BusinessDate is DateOnly date && date > Today()) errors["BusinessDate"] = ["cannot be in the future"]; return errors; } private static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo")); }
