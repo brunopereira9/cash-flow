@@ -21,6 +21,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddControllers();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1",
@@ -110,24 +111,7 @@ if (keycloakEnabled)
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "summary" }));
 app.MapHealthChecks("/readyz");
-app.MapPost("/internal/events",
-    async ([FromBody] ProjectionEvent message, ProjectionService projection, CancellationToken token) =>
-    await projection.ApplyAsync(message, token) ? Results.Accepted() : Results.Ok(new { duplicate = true }));
-var dailySummary = app.MapGet("/summary/daily/{date}",
-    async (DateOnly date, SummaryDbContext db, IConfiguration config, ILogger<Summary.Api.Program> logger,
-        CancellationToken token) =>
-    {
-        if (!config.GetValue("Summary:Available", true))
-            return Results.Json(new { freshnessStatus = "unavailable" }, statusCode: 503);
-        var summary = await db.DailySummaries.FindAsync([date], token) ??
-                      DailySummary.Create(date, 0, 0, DateTimeOffset.UtcNow);
-        var threshold = TimeSpan.FromSeconds(config.GetValue("Summary:FreshnessSeconds", 30));
-        summary.MarkFreshness(DateTimeOffset.UtcNow - summary.AsOf > threshold ? "stale" : "current");
-        logger.LogInformation("Business event {BusinessEvent} read for {BusinessDate} with freshness {FreshnessStatus}",
-            "summary.daily.read", date, summary.FreshnessStatus);
-        return Results.Ok(summary);
-    });
-if (keycloakEnabled) dailySummary.RequireAuthorization();
+app.MapControllers();
 app.Run();
 
 namespace Summary.Api
