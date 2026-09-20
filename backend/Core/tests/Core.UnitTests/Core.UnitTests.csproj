@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Api\Core.Api.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Identity\CashFlow.BuildingBlocks.Identity.csproj" />
   </ItemGroup>
 
 </Project>
