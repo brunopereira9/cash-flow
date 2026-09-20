@@ -4,6 +4,7 @@ using System.Text.Json;
 using Core.Api;
 using Core.Api.Application.Interfaces;
 using Core.Api.Application.Models;
+using Core.Api.Application.Events;
 using Core.Api.Application.Validation;
 using Core.Api.Domain.Entities;
 using Core.Api.Domain.Events;
@@ -87,6 +88,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("keycloak-current-state");
 builder.Services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
 builder.Services.AddScoped<IKeycloakAdminClient, KeycloakAdminClient>();
+builder.Services.AddScoped<LedgerMutationFactory>();
 var connection = builder.Configuration.GetConnectionString("Core") ??
                  "Host=postgres;Database=core_db;Username=cashflow;Password=local";
 if (builder.Configuration["Database:Provider"] == "Sqlite")
@@ -123,7 +125,8 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" })
 app.MapHealthChecks("/readyz");
 app.MapControllers();
 var createEntry = app.MapPost("/ledger/entries",
-    async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Core.Api.Program> logger,
+    async (CreateEntryRequest request, HttpContext http, CoreDbContext db, LedgerMutationFactory mutations,
+        ILogger<Core.Api.Program> logger,
         CancellationToken token) =>
     {
         var errors = EntryValidator.Validate(request);
@@ -145,7 +148,7 @@ var createEntry = app.MapPost("/ledger/entries",
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         db.LedgerEntries.Add(entry);
         db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry });
-        AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1");
+        mutations.Add(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1");
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         logger.LogInformation(
@@ -160,7 +163,8 @@ var listEntries = app.MapGet("/ledger/entries", async (DateOnly? date, CoreDbCon
     return Results.Ok(await query.OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token));
 });
 var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
-    async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
+    async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db,
+        LedgerMutationFactory mutations, CancellationToken token) =>
     {
         var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
         if (current is null || current.Deleted) return Results.NotFound();
@@ -174,13 +178,14 @@ var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
         current.BusinessDate = request.BusinessDate ?? current.BusinessDate;
         current.Version++;
         await using var transaction = await db.Database.BeginTransactionAsync(token);
-        AddMutation(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1");
+        mutations.Add(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1");
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         return Results.Ok(current);
     });
 var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}",
-    async (Guid id, int version, HttpContext http, CoreDbContext db, CancellationToken token) =>
+    async (Guid id, int version, HttpContext http, CoreDbContext db,
+        LedgerMutationFactory mutations, CancellationToken token) =>
     {
         var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
         if (current is null || current.Deleted) return Results.NotFound();
@@ -189,7 +194,7 @@ var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}",
         current.Deleted = true;
         current.Version++;
         await using var transaction = await db.Database.BeginTransactionAsync(token);
-        AddMutation(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1");
+        mutations.Add(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1");
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         return Results.NoContent();
@@ -250,17 +255,6 @@ static async Task<bool> IsAdminAsync(HttpContext http, ICurrentKeycloakAuthoriza
     if (http.User.Identity?.IsAuthenticated != true) return false;
     var state = await authorization.ConfirmAsync(http.User, token);
     return state.Enabled && state.Roles.Contains("admin");
-}
-
-static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, string actor, string correlation,
-    string name)
-{
-    db.AuditRecords.Add(new AuditRecord
-        { EntryId = entry.Id, Action = action, ActorId = actor, CorrelationId = correlation });
-    var eventId = Guid.NewGuid();
-    var payload = JsonSerializer.Serialize(new LedgerEventEnvelope(eventId, name, entry.Version,
-        new(entry.Id, entry.Amount, entry.Type, entry.Description, entry.BusinessDate, entry.Version, entry.Deleted)));
-    db.OutboxEvents.Add(new OutboxEvent { EventId = eventId, Name = name, Version = entry.Version, Payload = payload });
 }
 
 static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ??
