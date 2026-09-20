@@ -10,17 +10,29 @@ namespace Core.IntegrationTests;
 public class CurrentAuthorizationTests : IClassFixture<SecuredCoreApiFactory>
 {
     private readonly SecuredCoreApiFactory factory;
-    public CurrentAuthorizationTests(SecuredCoreApiFactory factory) => this.factory = factory;
+    public CurrentAuthorizationTests(SecuredCoreApiFactory factory)
+    {
+        this.factory = factory;
+    }
 
     [Fact]
     public async Task FailsClosedWhenKeycloakCannotConfirmState()
     {
-        using var client = factory.CreateClient(); client.DefaultRequestHeaders.Authorization = new("Bearer", AuthenticationTests.Token(DateTime.UtcNow.AddMinutes(5))); client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new(
+            "Bearer",
+            AuthenticationTests.Token(DateTime.UtcNow.AddMinutes(5)));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         var started = Stopwatch.GetTimestamp();
-        var response = await client.PostAsJsonAsync("/ledger/entries", new { amount = 10m, type = "credit", description = "Keycloak unavailable" });
+        var response = await client.PostAsJsonAsync(
+            "/ledger/entries",
+            new { amount = 10m, type = "credit", description = "Keycloak unavailable" });
         var elapsed = Stopwatch.GetElapsedTime(started);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal("2", factory.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()["Keycloak:CurrentStateTimeoutSeconds"]);
+        Assert.Equal(
+            "2",
+            factory.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()[
+                "Keycloak:CurrentStateTimeoutSeconds"]);
         Assert.InRange(elapsed, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(4.5));
         Assert.Equal((0, 0, 0), await factory.MutationCountsAsync());
     }
