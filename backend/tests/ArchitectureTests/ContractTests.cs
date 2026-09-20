@@ -11,9 +11,9 @@ public class CurrentAuthorizationContractTests
         Assert.Contains("Keycloak__AdminClientSecret", compose);
         foreach (var api in new[]
                  {
-                     Path.Combine(Root(), "backend", "Core", "src", "Infrastructure",
+                     Path.Combine(Root(), "backend", "Core", "src", "Api", "Infrastructure",
                          "CurrentKeycloakAuthorization.cs"),
-                     Path.Combine(Root(), "backend", "Summary", "src", "Infrastructure",
+                     Path.Combine(Root(), "backend", "Summary", "src", "Api", "Infrastructure",
                          "CurrentKeycloakAuthorization.cs")
                  })
         {
@@ -58,7 +58,7 @@ public class IdentityAccessContractTests
     [Fact]
     public void UsesKeycloakAdminApiForUserLifecycleAndRoleAssignment()
     {
-        var source = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Infrastructure",
+        var source = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Api", "Infrastructure",
             "KeycloakAdminClient.cs"));
         var program = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Api", "Program.cs"));
         Assert.Contains("/admin/realms/", source);
