@@ -39,7 +39,8 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
     }
 }
 
-public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
+[Collection("RabbitMQ integration")]
+public class ProjectionConsumerTests
 {
     private readonly RabbitMqFixture rabbit;
     public ProjectionConsumerTests(RabbitMqFixture rabbit) => this.rabbit = rabbit;

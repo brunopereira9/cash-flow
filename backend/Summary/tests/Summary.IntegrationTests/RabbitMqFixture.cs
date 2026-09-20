@@ -4,6 +4,11 @@ using RabbitMQ.Client;
 
 namespace Summary.IntegrationTests;
 
+[CollectionDefinition("RabbitMQ integration", DisableParallelization = true)]
+public sealed class RabbitMqCollection : ICollectionFixture<RabbitMqFixture>
+{
+}
+
 public sealed class RabbitMqFixture : IAsyncLifetime
 {
     private string? containerId;

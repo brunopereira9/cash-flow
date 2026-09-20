@@ -4,7 +4,8 @@ using System.Text.Json;
 
 namespace Summary.IntegrationTests;
 
-public class DailySummaryFreshnessTests : IClassFixture<RabbitMqFixture>
+[Collection("RabbitMQ integration")]
+public class DailySummaryFreshnessTests
 {
     private readonly RabbitMqFixture rabbit;
     public DailySummaryFreshnessTests(RabbitMqFixture rabbit) => this.rabbit = rabbit;
