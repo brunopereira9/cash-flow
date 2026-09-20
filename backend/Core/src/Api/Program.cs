@@ -24,24 +24,7 @@ using OpenTelemetry.Trace;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddControllers();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "CashFlow Core API",
-        Version = "v1",
-        Description = "Lançamentos, auditoria e administração de usuários do CashFlow."
-    });
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
-        In = ParameterLocation.Header, Description = "Informe apenas o token JWT."
-    });
-    options.OperationFilter<CoreSwaggerExamplesOperationFilter>();
-});
+builder.Services.AddCoreWeb();
 builder.AddCoreTelemetry();
 builder.Services.AddCoreAuthentication(builder.Configuration);
 builder.Services.AddScoped<LedgerMutationFactory>();

@@ -20,24 +20,7 @@ using Summary.Api.Infrastructure.Persistence;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddControllers();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1",
-        new OpenApiInfo
-        {
-            Title = "CashFlow Summary API", Version = "v1", Description = "Projeções e resumos diários do CashFlow."
-        });
-    options.AddSecurityDefinition("Bearer",
-        new OpenApiSecurityScheme
-        {
-            Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
-            In = ParameterLocation.Header, Description = "Informe apenas o token JWT."
-        });
-    options.OperationFilter<SummarySwaggerExamplesOperationFilter>();
-});
+builder.Services.AddSummaryWeb();
 builder.AddSummaryTelemetry();
 builder.Services.AddSummaryAuthentication(builder.Configuration);
 builder.Services.AddSummaryPersistence(builder.Configuration);
