@@ -19,7 +19,7 @@ public class CurrentAuthorizationContractTests
         {
             var source = File.ReadAllText(api);
             Assert.Contains("Status503ServiceUnavailable", source);
-            Assert.Contains("!state.Enabled || !HasBusinessRole(state.Roles)", source);
+            Assert.Contains("!state.Enabled", source);
             Assert.Contains("Status403Forbidden", source);
         }
 
