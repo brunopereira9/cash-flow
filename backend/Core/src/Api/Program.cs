@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Core.Api;
@@ -124,38 +123,6 @@ app.Use(async (ctx, next) =>
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
 app.MapControllers();
-var createEntry = app.MapPost("/ledger/entries",
-    async (CreateEntryRequest request, HttpContext http, CoreDbContext db, LedgerMutationFactory mutations,
-        ILogger<Core.Api.Program> logger,
-        CancellationToken token) =>
-    {
-        var errors = EntryValidator.Validate(request);
-        var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"];
-        if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
-        var actor = Actor(http);
-        var date = request.BusinessDate ?? Today();
-        var intent =
-            $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
-        var old = await db.CreationAttempts.Include(x => x.Entry)
-            .SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token);
-        if (old is not null)
-            return old.Intent == intent
-                ? Results.Ok(old.Entry)
-                : Results.Conflict(new { code = "idempotency_conflict" });
-        var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1,
-            false);
-        await using var transaction = await db.Database.BeginTransactionAsync(token);
-        db.LedgerEntries.Add(entry);
-        db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry });
-        mutations.Add(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1");
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        logger.LogInformation(
-            "Business event {BusinessEvent} published with {EntryId}, {Amount}, {EntryType}, {ActorId}",
-            "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
-        return Results.Created($"/ledger/entries/{entry.Id}", entry);
-    });
 var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
     async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db,
         LedgerMutationFactory mutations, CancellationToken token) =>
@@ -232,7 +199,6 @@ var updateUser = app.MapPut("/identity/users/{id}",
     });
 if (keycloakEnabled)
 {
-    createEntry.RequireAuthorization();
     updateEntry.RequireAuthorization();
     deleteEntry.RequireAuthorization();
     users.RequireAuthorization();
@@ -255,9 +221,6 @@ static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"
 
 static string Correlation(HttpContext context) =>
     context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
-
-static DateOnly Today() =>
-    DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
 
 namespace Core.Api
 {
