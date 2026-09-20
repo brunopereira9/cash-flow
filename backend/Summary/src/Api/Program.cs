@@ -61,28 +61,7 @@ builder.Services.AddOpenTelemetry()
         .AddSource("CashFlow.Summary.Messaging").AddOtlpExporter())
     .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation()
         .AddMeter("CashFlow.Summary").AddOtlpExporter());
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
-{
-    o.MapInboundClaims = false;
-    o.Authority = builder.Configuration["Keycloak:Authority"];
-    o.Audience = builder.Configuration["Keycloak:Audience"] ?? "cashflow";
-    o.RequireHttpsMetadata = false;
-    o.TokenValidationParameters.ValidIssuer =
-        builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"];
-    var testKey = builder.Configuration["Keycloak:ValidationSigningKey"];
-    if (!string.IsNullOrWhiteSpace(testKey))
-        o.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(testKey)), ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"],
-            ValidateAudience = true, ValidAudience = builder.Configuration["Keycloak:Audience"] ?? "cashflow",
-            ValidateLifetime = true, ClockSkew = TimeSpan.Zero
-        };
-});
-builder.Services.AddAuthorization();
-builder.Services.AddHttpClient("keycloak-current-state");
-builder.Services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
+builder.Services.AddSummaryAuthentication(builder.Configuration);
 builder.Services.AddSummaryPersistence(builder.Configuration);
 builder.Services.AddScoped<ProjectionService>();
 builder.Services.AddHostedService<RabbitSummaryConsumer>();
