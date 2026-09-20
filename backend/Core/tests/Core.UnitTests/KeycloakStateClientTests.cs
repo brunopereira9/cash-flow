@@ -53,6 +53,21 @@ public sealed class KeycloakStateClientTests
             () => sut.GetAsync(subject, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task RejectsPrincipalWithoutSubjectBeforeCallingKeycloak()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            throw new InvalidOperationException("Keycloak should not be called."));
+        var sut = CreateSut(CreateClient(handler));
+        var subject = new ClaimsPrincipal(new ClaimsIdentity([], "test"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.GetAsync(subject, CancellationToken.None));
+
+        Assert.Equal("JWT has no subject.", exception.Message);
+        Assert.Empty(handler.Requests);
+    }
+
     private static KeycloakStateClient CreateSut(HttpClient client)
     {
         var clients = new StubHttpClientFactory(client);
