@@ -101,6 +101,9 @@ public sealed class KeycloakStateClientTests
             if (request.RequestUri!.AbsolutePath.EndsWith("/token", StringComparison.Ordinal))
                 return JsonResponse("{\"access_token\":\"admin-token\"}");
 
+            if (request.RequestUri.AbsolutePath.Contains("/role-mappings/realm", StringComparison.Ordinal))
+                return JsonResponse("[]");
+
             return JsonResponse("{\"enabled\":\"yes\"}");
         });
         var sut = CreateSut(CreateClient(handler));
@@ -108,7 +111,7 @@ public sealed class KeycloakStateClientTests
             [new Claim("sub", "user-1")],
             "test"));
 
-        await Assert.ThrowsAsync<JsonException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.GetAsync(subject, CancellationToken.None));
     }
 
