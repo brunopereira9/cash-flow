@@ -22,6 +22,15 @@ exporters:
     endpoint: https://otlp.nr-data.net
     headers:
       api-key: ${env:NEW_RELIC_LICENSE_KEY}
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2048
 
 service:
   extensions: [health_check]

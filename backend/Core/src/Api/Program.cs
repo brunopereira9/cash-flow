@@ -8,14 +8,38 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
+using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi.Any;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "CashFlow Core API",
+        Version = "v1",
+        Description = "Lançamentos, auditoria e administração de usuários do CashFlow."
+    });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
+        In = ParameterLocation.Header, Description = "Informe apenas o token JWT."
+    });
+    options.OperationFilter<CoreSwaggerExamplesOperationFilter>();
+});
 var samplingRatio = Math.Clamp(builder.Configuration.GetValue("Telemetry:SamplingRatio", 1.0), 0.0, 1.0);
 builder.Logging.AddOpenTelemetry(logging => { logging.IncludeFormattedMessage = true; logging.IncludeScopes = true; logging.AddOtlpExporter(); });
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(builder.Configuration["OTEL_SERVICE_NAME"] ?? "cashflow-core"))
-    .WithTracing(tracing => tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(samplingRatio))).AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddOtlpExporter())
+    .ConfigureResource(resource => resource.AddService(builder.Configuration["OTEL_SERVICE_NAME"] ?? "cash-flow-core-api", serviceVersion: builder.Configuration["OTEL_SERVICE_VERSION"] ?? "1.0.0").AddAttributes(new Dictionary<string, object>
+    {
+        ["deployment.environment"] = builder.Configuration["OTEL_ENVIRONMENT"] ?? builder.Environment.EnvironmentName,
+        ["service.namespace"] = "cashflow",
+        ["service.instance.id"] = Environment.MachineName
+    }))
+    .WithTracing(tracing => tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(samplingRatio))).AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddEntityFrameworkCoreInstrumentation().AddSource("CashFlow.Core.Messaging").AddOtlpExporter())
     .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation().AddMeter("CashFlow.Core").AddOtlpExporter());
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o => { o.MapInboundClaims = false; o.Authority = builder.Configuration["Keycloak:Authority"]; o.Audience = builder.Configuration["Keycloak:Audience"] ?? "cashflow"; o.RequireHttpsMetadata = false; o.TokenValidationParameters.ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"]; var testKey = builder.Configuration["Keycloak:ValidationSigningKey"]; if (!string.IsNullOrWhiteSpace(testKey)) o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(testKey)), ValidateIssuer = true, ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"], ValidateAudience = true, ValidAudience = builder.Configuration["Keycloak:Audience"] ?? "cashflow", ValidateLifetime = true, ClockSkew = TimeSpan.Zero }; });
 builder.Services.AddAuthorization();
@@ -27,6 +51,8 @@ if (builder.Configuration["Database:Provider"] == "Sqlite") builder.Services.Add
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck<CoreDbContext>>("database");
 builder.Services.AddHostedService<RabbitOutboxRelay>();
 var app = builder.Build();
+app.UseSwagger();
+app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "CashFlow Core API v1"));
 if (args.Any(argument => string.Equals(argument, "--migrate", StringComparison.OrdinalIgnoreCase)))
 {
     await app.Services.GetRequiredService<CoreDbContext>().Database.MigrateAsync();
@@ -37,13 +63,13 @@ app.UseCors(); if (keycloakEnabled) { app.UseAuthentication(); app.UseAuthorizat
 app.Use(async (ctx, next) => { ctx.Response.Headers["X-Correlation-Id"] = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N"); await next(); });
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
-var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
+var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Program> logger, CancellationToken token) =>
 {
     var errors = EntryValidation.Validate(request); var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault(); if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"]; if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
     var actor = Actor(http); var date = request.BusinessDate ?? Today(); var intent = $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
     var old = await db.CreationAttempts.Include(x => x.Entry).SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token); if (old is not null) return old.Intent == intent ? Results.Ok(old.Entry) : Results.Conflict(new { code = "idempotency_conflict" });
     var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1, false);
-    await using var transaction = await db.Database.BeginTransactionAsync(token); db.LedgerEntries.Add(entry); db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry }); AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token);
+    await using var transaction = await db.Database.BeginTransactionAsync(token); db.LedgerEntries.Add(entry); db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry }); AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); logger.LogInformation("Business event {BusinessEvent} published with {EntryId}, {Amount}, {EntryType}, {ActorId}", "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
     return Results.Created($"/ledger/entries/{entry.Id}", entry);
 });
 var listEntries = app.MapGet("/ledger/entries", async (CoreDbContext db, CancellationToken token) => Results.Ok(await db.LedgerEntries.Where(x => !x.Deleted).OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token)));
@@ -112,6 +138,24 @@ static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, stri
 static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? context.User.FindFirst("sub")?.Value ?? "demo-operator";
 static string Correlation(HttpContext context) => context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
 static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
+public sealed class CoreSwaggerExamplesOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var path = context.ApiDescription.RelativePath?.Split('?')[0];
+        if (path is null) return;
+        operation.Tags ??= [new OpenApiTag { Name = path.StartsWith("identity") ? "Identity" : path.StartsWith("audit") ? "Audit" : path.StartsWith("health") || path.StartsWith("ready") ? "Health" : "Ledger" }];
+        if (path == "ledger/entries" && context.ApiDescription.HttpMethod == "POST")
+        {
+            if (operation.RequestBody?.Content.TryGetValue("application/json", out var requestContent) == true)
+                requestContent.Examples["default"] = new OpenApiExample { Summary = "Novo lançamento", Value = new OpenApiObject { ["amount"] = new OpenApiDouble(149.90), ["type"] = new OpenApiString("expense"), ["description"] = new OpenApiString("Compra de materiais"), ["businessDate"] = new OpenApiString("2026-09-20") } };
+        }
+        if (path == "ledger/entries" && context.ApiDescription.HttpMethod == "GET")
+            if (operation.Responses.TryGetValue("200", out var response) && response.Content.TryGetValue("application/json", out var responseContent))
+                responseContent.Examples["default"] = new OpenApiExample { Value = new OpenApiArray { new OpenApiObject { ["id"] = new OpenApiString("7d9f3e1a-1b4f-4d2f-9a0b-123456789abc"), ["amount"] = new OpenApiDouble(149.90), ["type"] = new OpenApiString("expense"), ["description"] = new OpenApiString("Compra de materiais"), ["businessDate"] = new OpenApiString("2026-09-20"), ["version"] = new OpenApiInteger(1), ["deleted"] = new OpenApiBoolean(false) } } };
+        if (path == "healthz" && operation.Responses.TryGetValue("200", out var healthResponse) && healthResponse.Content.TryGetValue("application/json", out var healthContent)) healthContent.Examples["default"] = new OpenApiExample { Value = new OpenApiObject { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("core") } };
+    }
+}
 public partial class Program;
 public record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
 public record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);

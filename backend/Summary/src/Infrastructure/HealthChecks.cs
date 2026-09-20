@@ -22,6 +22,7 @@ public sealed class SummaryDatabaseReadinessCheck(IServiceScopeFactory scopes) :
 
 public static class CashFlowSummaryTelemetry
 {
+    public static readonly System.Diagnostics.ActivitySource Messaging = new("CashFlow.Summary.Messaging");
     private static readonly System.Diagnostics.Metrics.Meter Meter = new("CashFlow.Summary", "1.0.0");
     public static readonly System.Diagnostics.Metrics.Counter<long> InboxDuplicates = Meter.CreateCounter<long>("cashflow.inbox.duplicates");
     public static readonly System.Diagnostics.Metrics.Counter<long> ProjectionApplied = Meter.CreateCounter<long>("cashflow.projection.applied");

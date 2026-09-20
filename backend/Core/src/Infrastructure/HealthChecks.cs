@@ -23,6 +23,7 @@ public sealed class DatabaseReadinessCheck<TContext>(IServiceScopeFactory scopes
 
 public static class CashFlowCoreTelemetry
 {
+    public static readonly System.Diagnostics.ActivitySource Messaging = new("CashFlow.Core.Messaging");
     private static readonly System.Diagnostics.Metrics.Meter Meter = new("CashFlow.Core", "1.0.0");
     public static readonly System.Diagnostics.Metrics.Counter<long> OutboxPublished = Meter.CreateCounter<long>("cashflow.outbox.published");
     public static readonly System.Diagnostics.Metrics.Counter<long> OutboxFailures = Meter.CreateCounter<long>("cashflow.outbox.failures");

@@ -166,10 +166,11 @@ export class OidcClient {
     if (!response.ok) throw new Error('Não foi possível concluir o login.')
 
     const token = await response.json() as { access_token?: string, expires_in?: number }
-    if (!token.access_token || token.expires_in !== 3600) throw new Error('Token OIDC inválido.')
+    const expiresIn = token.expires_in
+    if (!token.access_token || expiresIn === undefined || !Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('Token OIDC inválido.')
     session = {
       accessToken: token.access_token,
-      expiresAt: Date.now() + token.expires_in * 1000,
+      expiresAt: Date.now() + expiresIn * 1000,
       role: roleFromAccessToken(token.access_token),
     }
     return session

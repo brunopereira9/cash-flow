@@ -31,7 +31,7 @@ services:
       RabbitMq__Enabled: "true"
       RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
       Keycloak__Enabled: "true"
-      Keycloak__Authority: http://host.docker.internal:18081/realms/cashflow
+      Keycloak__Authority: http://keycloak:8080/realms/cashflow
       Keycloak__Issuer: http://localhost:18081/realms/cashflow
       Keycloak__Audience: cashflow-front
       Keycloak__AdminClientId: cashflow-api
@@ -40,8 +40,12 @@ services:
       Keycloak__UserAdminClientSecret: local-cashflow-admin-secret
       Keycloak__CurrentStateTimeoutSeconds: "2"
       Telemetry__SamplingRatio: "1.0"
-      OTEL_SERVICE_NAME: cashflow-core
+      OTEL_SERVICE_NAME: cash-flow-core-api
+      OTEL_SERVICE_VERSION: "1.0.0"
+      OTEL_ENVIRONMENT: local
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=cashflow
       OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck: { test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"], interval: 10s, timeout: 5s, retries: 12, start_period: 20s }
     depends_on:
@@ -60,15 +64,19 @@ services:
       RabbitMq__Enabled: "true"
       RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
       Keycloak__Enabled: "true"
-      Keycloak__Authority: http://host.docker.internal:18081/realms/cashflow
+      Keycloak__Authority: http://keycloak:8080/realms/cashflow
       Keycloak__Issuer: http://localhost:18081/realms/cashflow
       Keycloak__Audience: cashflow-front
       Keycloak__AdminClientId: cashflow-summary
       Keycloak__AdminClientSecret: local-cashflow-summary-secret
       Keycloak__CurrentStateTimeoutSeconds: "2"
       Telemetry__SamplingRatio: "1.0"
-      OTEL_SERVICE_NAME: cashflow-summary
+      OTEL_SERVICE_NAME: cash-flow-summary-api
+      OTEL_SERVICE_VERSION: "1.0.0"
+      OTEL_ENVIRONMENT: local
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=cashflow
       OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     extra_hosts: ["host.docker.internal:host-gateway"]
     healthcheck: { test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"], interval: 10s, timeout: 5s, retries: 12, start_period: 20s }
     depends_on:
@@ -92,7 +100,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     ports: ["18081:8080"]
-    command: start-dev --import-realm
+    command: start-dev --features=preview --import-realm
     volumes: ["../../infra/keycloak:/opt/keycloak/data/import:ro"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -103,6 +111,20 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
       KC_DB_USERNAME: cashflow
       KC_DB_PASSWORD: local
+      KC_METRICS_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_TRACING_ENABLED: "true"
+      KC_TRACING_ENDPOINT: http://collector:4317
+      KC_TRACING_PROTOCOL: grpc
+      KC_TRACING_SAMPLER_TYPE: always_on
+      KC_TRACING_SERVICE_NAME: cash-flow-keycloak
+      KC_TELEMETRY_SERVICE_NAME: cash-flow-keycloak
+      KC_TELEMETRY_ENDPOINT: http://collector:4317
+      KC_TELEMETRY_PROTOCOL: grpc
+      KC_TELEMETRY_METRICS_ENABLED: "true"
+      KC_TELEMETRY_METRICS_ENDPOINT: http://collector:4317
+      KC_TELEMETRY_METRICS_PROTOCOL: grpc
+      KC_TELEMETRY_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=cashflow
     healthcheck: { test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080"], interval: 10s, timeout: 5s, retries: 18, start_period: 30s }
   collector:
     image: otel/opentelemetry-collector-contrib:latest
