@@ -65,4 +65,68 @@ public sealed class LedgerController(
 
         return Ok(entries);
     }
+
+    [HttpPut("entries/{id:guid}")]
+    public async Task<IActionResult> UpdateEntry(
+        Guid id,
+        UpdateEntryRequest request,
+        CancellationToken token)
+    {
+        var current = await db.LedgerEntries.SingleOrDefaultAsync(entry => entry.Id == id, token);
+
+        if (current is null || current.Deleted)
+            return NotFound();
+
+        if (request.Version != current.Version)
+            return Conflict(new { code = "stale_version", currentVersion = current.Version });
+
+        var errors = EntryValidator.Validate(request);
+        if (errors.Count > 0)
+            return UnprocessableEntity(new ValidationProblemDetails(errors));
+
+        current.Amount = request.Amount;
+        current.Type = request.Type!;
+        current.Description = request.Description!;
+        current.BusinessDate = request.BusinessDate ?? current.BusinessDate;
+        current.Version++;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        mutations.Add(db, current, "updated", Actor(), Correlation(), "LedgerEntryUpdated.v1");
+        await db.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+
+        return Ok(current);
+    }
+
+    [HttpDelete("entries/{id:guid}")]
+    public async Task<IActionResult> DeleteEntry(
+        Guid id,
+        [FromQuery] int version,
+        CancellationToken token)
+    {
+        var current = await db.LedgerEntries.SingleOrDefaultAsync(entry => entry.Id == id, token);
+
+        if (current is null || current.Deleted)
+            return NotFound();
+
+        if (version != current.Version)
+            return Conflict(new { code = "stale_version", currentVersion = current.Version });
+
+        current.Deleted = true;
+        current.Version++;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        mutations.Add(db, current, "deleted", Actor(), Correlation(), "LedgerEntryDeleted.v1");
+        await db.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+
+        return NoContent();
+    }
+
+    private string Actor() => Request.Headers["X-Actor-Id"].FirstOrDefault()
+        ?? User.FindFirst("sub")?.Value
+        ?? "demo-operator";
+
+    private string Correlation() => Response.Headers["X-Correlation-Id"].FirstOrDefault()
+        ?? Guid.NewGuid().ToString("N");
 }

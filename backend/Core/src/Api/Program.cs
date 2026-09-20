@@ -123,43 +123,6 @@ app.Use(async (ctx, next) =>
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
 app.MapControllers();
-var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
-    async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db,
-        LedgerMutationFactory mutations, CancellationToken token) =>
-    {
-        var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
-        if (current is null || current.Deleted) return Results.NotFound();
-        if (request.Version != current.Version)
-            return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
-        var errors = EntryValidator.Validate(request);
-        if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
-        current.Amount = request.Amount;
-        current.Type = request.Type!;
-        current.Description = request.Description!;
-        current.BusinessDate = request.BusinessDate ?? current.BusinessDate;
-        current.Version++;
-        await using var transaction = await db.Database.BeginTransactionAsync(token);
-        mutations.Add(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1");
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return Results.Ok(current);
-    });
-var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}",
-    async (Guid id, int version, HttpContext http, CoreDbContext db,
-        LedgerMutationFactory mutations, CancellationToken token) =>
-    {
-        var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
-        if (current is null || current.Deleted) return Results.NotFound();
-        if (version != current.Version)
-            return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
-        current.Deleted = true;
-        current.Version++;
-        await using var transaction = await db.Database.BeginTransactionAsync(token);
-        mutations.Add(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1");
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return Results.NoContent();
-    });
 var users = app.MapGet("/identity/users",
     async (HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin,
         CancellationToken token) =>
@@ -199,8 +162,6 @@ var updateUser = app.MapPut("/identity/users/{id}",
     });
 if (keycloakEnabled)
 {
-    updateEntry.RequireAuthorization();
-    deleteEntry.RequireAuthorization();
     users.RequireAuthorization();
     createUser.RequireAuthorization();
     updateUser.RequireAuthorization();
