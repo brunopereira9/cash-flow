@@ -61,7 +61,7 @@ public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
     }
 
     private static bool HasBusinessRole(IReadOnlySet<string> roles) =>
-        roles.Count(role => role is "admin" or "operator" or "auditor") == 1;
+        roles.Count(role => role is "admin" or "operator") == 1;
 
     private static bool HasWriteRole(IReadOnlySet<string> roles) =>
         roles.Contains("admin") || roles.Contains("operator");
