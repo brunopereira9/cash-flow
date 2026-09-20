@@ -25,6 +25,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddControllers();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -120,6 +121,7 @@ app.Use(async (ctx, next) =>
 });
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
+app.MapControllers();
 var createEntry = app.MapPost("/ledger/entries",
     async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Core.Api.Program> logger,
         CancellationToken token) =>
@@ -192,22 +194,6 @@ var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}",
         await transaction.CommitAsync(token);
         return Results.NoContent();
     });
-var audit = app.MapGet("/audit", async (HttpRequest request, CoreDbContext db, CancellationToken token) =>
-{
-    var actor = request.Query["actor"].FirstOrDefault();
-    var operation = request.Query["operation"].FirstOrDefault();
-    var correlation = request.Query["correlation"].FirstOrDefault();
-    DateTimeOffset? from = DateTimeOffset.TryParse(request.Query["from"], out var parsedFrom) ? parsedFrom : null;
-    DateTimeOffset? to = DateTimeOffset.TryParse(request.Query["to"], out var parsedTo) ? parsedTo : null;
-    var query = db.AuditRecords.AsQueryable();
-    if (!string.IsNullOrWhiteSpace(actor)) query = query.Where(x => x.ActorId == actor);
-    if (!string.IsNullOrWhiteSpace(operation)) query = query.Where(x => x.Action == operation);
-    if (!string.IsNullOrWhiteSpace(correlation)) query = query.Where(x => x.CorrelationId == correlation);
-    if (from is not null) query = query.Where(x => x.At >= from);
-    if (to is not null) query = query.Where(x => x.At <= to);
-    var records = await query.ToListAsync(token);
-    return Results.Ok(records.OrderByDescending(x => x.At));
-});
 var users = app.MapGet("/identity/users",
     async (HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin,
         CancellationToken token) =>
@@ -251,7 +237,6 @@ if (keycloakEnabled)
     listEntries.RequireAuthorization();
     updateEntry.RequireAuthorization();
     deleteEntry.RequireAuthorization();
-    audit.RequireAuthorization();
     users.RequireAuthorization();
     createUser.RequireAuthorization();
     updateUser.RequireAuthorization();
