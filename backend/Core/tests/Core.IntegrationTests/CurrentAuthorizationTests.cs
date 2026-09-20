@@ -57,8 +57,14 @@ internal sealed class KeycloakProtocolHandler(Func<ProtocolCurrentKeycloakState>
                 : path.Contains("/admin/realms/", StringComparison.Ordinal)
                     ? $"{{\"enabled\":{current.Enabled.ToString().ToLowerInvariant()}}}"
                     : "{}";
-        var response = new HttpResponseMessage(path.Contains("/admin/realms/", StringComparison.Ordinal) || path.EndsWith("/token", StringComparison.Ordinal) ? System.Net.HttpStatusCode.OK : System.Net.HttpStatusCode.NotFound)
-        { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        var statusCode = path.Contains("/admin/realms/", StringComparison.Ordinal) ||
+                         path.EndsWith("/token", StringComparison.Ordinal)
+            ? System.Net.HttpStatusCode.OK
+            : System.Net.HttpStatusCode.NotFound;
+        var response = new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
         return Task.FromResult(response);
     }
 }
@@ -66,12 +72,23 @@ internal sealed class KeycloakProtocolHandler(Func<ProtocolCurrentKeycloakState>
 public sealed class CurrentStateCoreApiFactory : MigratedCoreApiFactory
 {
     public ProtocolCurrentKeycloakState State { get; } = new();
-    private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-current-state-{Guid.NewGuid():N}.db");
+    private readonly string database = Path.Combine(
+        Path.GetTempPath(),
+        $"cashflow-current-state-{Guid.NewGuid():N}.db");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("Database:Provider", "Sqlite"); builder.UseSetting("ConnectionStrings:Core", $"Data Source={database}"); builder.UseSetting("RabbitMq:Enabled", "false");
-        builder.UseSetting("Keycloak:Enabled", "true"); builder.UseSetting("Keycloak:Authority", "http://keycloak.test/realms/cashflow"); builder.UseSetting("Keycloak:Audience", SecuredCoreApiFactory.Audience); builder.UseSetting("Keycloak:ValidationSigningKey", SecuredCoreApiFactory.SigningKey); builder.UseSetting("Keycloak:AdminClientSecret", "test-secret");
-        builder.ConfigureServices(services => services.AddHttpClient("keycloak-current-state").ConfigurePrimaryHttpMessageHandler(() => new KeycloakProtocolHandler(() => State)));
+        builder.UseSetting("Database:Provider", "Sqlite");
+        builder.UseSetting("ConnectionStrings:Core", $"Data Source={database}");
+        builder.UseSetting("RabbitMq:Enabled", "false");
+        builder.UseSetting("Keycloak:Enabled", "true");
+        builder.UseSetting("Keycloak:Authority", "http://keycloak.test/realms/cashflow");
+        builder.UseSetting("Keycloak:Audience", SecuredCoreApiFactory.Audience);
+        builder.UseSetting("Keycloak:ValidationSigningKey", SecuredCoreApiFactory.SigningKey);
+        builder.UseSetting("Keycloak:AdminClientSecret", "test-secret");
+        builder.ConfigureServices(services =>
+            services.AddHttpClient("keycloak-current-state")
+                .ConfigurePrimaryHttpMessageHandler(() => new KeycloakProtocolHandler(() => State)));
     }
 }
 
