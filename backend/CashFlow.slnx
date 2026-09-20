@@ -1,10 +1,9 @@
 <Solution>
   <Folder Name="/Core/" />
   <Folder Name="/Core/src/">
-    <Folder Name="/Core/src/Api/" />
-    <Folder Name="/Core/src/Application/" />
-    <Folder Name="/Core/src/Domain/" />
-    <Folder Name="/Core/src/Infrastructure/" />
+    <Folder Name="/Core/src/Api/Application/" />
+    <Folder Name="/Core/src/Api/Domain/" />
+    <Folder Name="/Core/src/Api/Infrastructure/" />
     <Project Path="Core/src/Api/Core.Api.csproj" />
   </Folder>
   <Folder Name="/Core/tests/">
@@ -13,10 +12,9 @@
   </Folder>
   <Folder Name="/Summary/" />
   <Folder Name="/Summary/src/">
-    <Folder Name="/Summary/src/Api/" />
-    <Folder Name="/Summary/src/Application/" />
-    <Folder Name="/Summary/src/Domain/" />
-    <Folder Name="/Summary/src/Infrastructure/" />
+    <Folder Name="/Summary/src/Api/Application/" />
+    <Folder Name="/Summary/src/Api/Domain/" />
+    <Folder Name="/Summary/src/Api/Infrastructure/" />
     <Project Path="Summary/src/Api/Summary.Api.csproj" />
   </Folder>
   <Folder Name="/Summary/tests/">

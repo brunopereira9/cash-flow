@@ -22,17 +22,4 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Application\Interfaces\" />
-    <Folder Include="Application\Models\" />
-    <Folder Include="Domain\Entities\" />
-    <Folder Include="Domain\Events\" />
-    <Folder Include="Infrastructure\Identity\" />
-    <Folder Include="Infrastructure\Messaging\" />
-    <Folder Include="Infrastructure\Persistence\" />
-    <Compile Include="..\Domain\**\*.cs" />
-    <Compile Include="..\Application\**\*.cs" />
-    <Compile Include="..\Infrastructure\**\*.cs" />
-  </ItemGroup>
-
 </Project>
