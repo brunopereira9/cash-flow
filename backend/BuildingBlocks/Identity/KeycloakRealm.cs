@@ -14,8 +14,15 @@ public static class KeycloakRealm
                 "Keycloak authority must contain /realms/{realm}.");
         }
 
+        var realm = uri.AbsolutePath[(index + marker.Length)..];
+        if (string.IsNullOrWhiteSpace(realm) || realm.Contains('/', StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Keycloak authority must contain /realms/{realm}.");
+        }
+
         return (
             $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath[..index]}",
-            uri.AbsolutePath[(index + marker.Length)..]);
+            realm);
     }
 }
