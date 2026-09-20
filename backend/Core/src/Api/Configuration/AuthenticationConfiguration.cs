@@ -1,4 +1,5 @@
 using System.Text;
+using CashFlow.BuildingBlocks.Identity;
 using Core.Api.Application.Interfaces;
 using Core.Api.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -18,6 +19,7 @@ public static class AuthenticationConfiguration
 
         services.AddAuthorization();
         services.AddHttpClient("keycloak-current-state");
+        services.AddScoped<KeycloakStateClient>();
         services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
         services.AddScoped<IKeycloakAdminClient, KeycloakAdminClient>();
 

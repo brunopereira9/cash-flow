@@ -6,12 +6,20 @@ using Microsoft.AspNetCore.Authentication;
 
 namespace Summary.Api.Infrastructure.Identity;
 
-public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, IConfiguration configuration)
+public sealed class CurrentKeycloakAuthorization(
+    IHttpClientFactory clients,
+    IConfiguration configuration,
+    KeycloakStateClient stateClient)
     : ICurrentKeycloakAuthorization
 {
     public async Task<CurrentKeycloakState> ConfirmAsync(ClaimsPrincipal principal, CancellationToken requestToken)
     {
         CashFlowSummaryTelemetry.KeycloakChecks.Add(1);
+        _ = clients;
+        _ = configuration;
+        var state = await stateClient.GetAsync(principal, requestToken);
+        return new CurrentKeycloakState(state.Enabled, state.Roles);
+        /*
         var subject = principal.FindFirstValue("sub") ?? throw new InvalidOperationException("JWT has no subject.");
         var authority = configuration["Keycloak:Authority"] ??
                         throw new InvalidOperationException("Keycloak authority is required.");
@@ -36,6 +44,7 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
         return new CurrentKeycloakState(user.RootElement.GetProperty("enabled").GetBoolean(),
             roles.RootElement.EnumerateArray().Select(x => x.GetProperty("name").GetString()!)
                 .ToHashSet(StringComparer.Ordinal));
+        */
     }
 
     private async Task<string> AdminTokenAsync(HttpClient client, string authority, CancellationToken token)
