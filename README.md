@@ -71,4 +71,37 @@ dotnet test backend/CashFlow.slnx
 cd front; npm install; npm run build
 ```
 
+## Executar os testes
+
+Restaure as dependências e compile a solução antes de executar a suíte:
+
+```powershell
+dotnet restore backend/CashFlow.slnx
+dotnet build backend/CashFlow.slnx --no-restore
+```
+
+Testes unitários e contratos arquiteturais:
+
+```powershell
+dotnet test backend/Core/tests/Core.UnitTests/Core.UnitTests.csproj --no-restore
+dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --no-restore
+```
+
+Testes de integração devem ser executados separadamente para evitar disputa por portas, containers e recursos do Docker:
+
+```powershell
+dotnet test backend/Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj --no-restore
+dotnet test backend/Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj --no-restore
+```
+
+Os testes de integração do Summary criam um container RabbitMQ temporário e, portanto, exigem o Docker Desktop em execução. A fixture usa as credenciais locais `integration/integration` e remove o container ao final.
+
+Para executar tudo de uma vez:
+
+```powershell
+dotnet test backend/CashFlow.slnx --no-restore
+```
+
+Essa forma é útil para uma verificação rápida, mas a execução separada dos projetos de integração é mais previsível em máquinas com recursos limitados. Os testes de timeout do Keycloak dependem do tempo de inicialização do `TestServer` e podem apresentar variação quando todos os assemblies são executados simultaneamente.
+
 Os serviços de infraestrutura, migrations e testes de comportamento são mantidos nas pastas `infra/`, `backend/` e `front/`.
