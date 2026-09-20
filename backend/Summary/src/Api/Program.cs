@@ -1,23 +1,10 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Mvc;
 using Summary.Api.Configuration;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Summary.Api;
-using Summary.Api.Domain.Entities;
-using Summary.Api.Domain.Events;
 using Summary.Api.Infrastructure;
 using Summary.Api.Infrastructure.Identity;
 using Summary.Api.Infrastructure.Messaging;
 using Summary.Api.Infrastructure.Persistence;
-using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSummaryWeb();

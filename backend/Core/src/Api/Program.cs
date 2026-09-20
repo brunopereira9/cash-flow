@@ -1,27 +1,11 @@
-using System.Text;
-using System.Text.Json;
 using Core.Api;
-using Core.Api.Application.Interfaces;
-using Core.Api.Application.Models;
 using Core.Api.Application.Events;
-using Core.Api.Application.Validation;
 using Core.Api.Configuration;
-using Core.Api.Domain.Entities;
-using Core.Api.Domain.Events;
 using Core.Api.Infrastructure;
 using Core.Api.Infrastructure.Identity;
 using Core.Api.Infrastructure.Messaging;
 using Core.Api.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
-using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCoreWeb();
