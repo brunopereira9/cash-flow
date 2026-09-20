@@ -11,20 +11,36 @@ public sealed class RabbitMqFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        containerId = RunDocker("run", "--detach", "--rm", "--publish", "0:5672", "rabbitmq:3-management-alpine")
+        containerId = RunDocker(
+                "run",
+                "--detach",
+                "--rm",
+                "--publish",
+                "0:5672",
+                "--env",
+                "RABBITMQ_DEFAULT_USER=integration",
+                "--env",
+                "RABBITMQ_DEFAULT_PASS=integration",
+                "rabbitmq:3-management-alpine")
             .Trim();
         var portOutput = RunDocker("port", containerId, "5672/tcp");
         var port = Regex.Match(portOutput, @":(?<port>\d+)\s*$", RegexOptions.Multiline).Groups["port"].Value;
         if (string.IsNullOrWhiteSpace(port))
             throw new InvalidOperationException($"Could not resolve RabbitMQ host port: {portOutput}");
-        Uri = $"amqp://guest:guest@localhost:{port}/";
+        Uri = $"amqp://integration:integration@localhost:{port}/";
 
         for (var attempt = 0; attempt < 120; attempt++)
         {
             try
             {
                 var connectionFactory = new ConnectionFactory
-                { Uri = new Uri(Uri), RequestedConnectionTimeout = TimeSpan.FromSeconds(1) };
+                {
+                    HostName = "localhost",
+                    Port = int.Parse(port),
+                    UserName = "integration",
+                    Password = "integration",
+                    RequestedConnectionTimeout = TimeSpan.FromSeconds(1)
+                };
                 using var connection = connectionFactory.CreateConnection();
                 return;
             }
