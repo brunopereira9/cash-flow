@@ -41,9 +41,6 @@ app.Use(async (ctx, next) =>
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
 app.MapControllers();
-if (keycloakEnabled)
-{
-}
 
 app.Run();
 
