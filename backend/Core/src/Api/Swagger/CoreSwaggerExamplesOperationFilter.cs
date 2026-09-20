@@ -26,7 +26,8 @@ public sealed class CoreSwaggerExamplesOperationFilter : IOperationFilter
                 Summary = "Novo lançamento",
                 Value = new OpenApiObject
                 {
-                    ["amount"] = new OpenApiDouble(149.90), ["type"] = new OpenApiString("expense"),
+                    ["amount"] = new OpenApiDouble(149.90),
+                    ["type"] = new OpenApiString("expense"),
                     ["description"] = new OpenApiString("Compra de materiais"),
                     ["businessDate"] = new OpenApiString("2026-09-20")
                 }
@@ -53,7 +54,7 @@ public sealed class CoreSwaggerExamplesOperationFilter : IOperationFilter
             healthContent.Examples["default"] = new OpenApiExample
             {
                 Value = new OpenApiObject
-                    { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("core") }
+                { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("core") }
             };
     }
 }

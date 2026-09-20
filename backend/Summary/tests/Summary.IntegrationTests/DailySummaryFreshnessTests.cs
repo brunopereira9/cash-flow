@@ -23,7 +23,7 @@ public class DailySummaryFreshnessTests : IClassFixture<RabbitMqFixture>
         using var create = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
         {
             Content = JsonContent.Create(new
-                { amount = 10m, type = "debit", description = "fresh", businessDate = firstDate })
+            { amount = 10m, type = "debit", description = "fresh", businessDate = firstDate })
         };
         create.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         create.Headers.Add("X-Actor-Id", "freshness-actor");
@@ -38,7 +38,7 @@ public class DailySummaryFreshnessTests : IClassFixture<RabbitMqFixture>
         using var update = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{entryId}")
         {
             Content = JsonContent.Create(new
-                { amount = 30m, type = "credit", description = "edited", businessDate = movedDate, version = 1 })
+            { amount = 30m, type = "credit", description = "edited", businessDate = movedDate, version = 1 })
         };
         update.Headers.Add("X-Actor-Id", "freshness-actor");
         var updated = await coreClient.SendAsync(update);

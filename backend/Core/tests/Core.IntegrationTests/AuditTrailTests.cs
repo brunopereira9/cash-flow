@@ -21,7 +21,7 @@ public class AuditTrailTests : IClassFixture<CoreApiFactory>
     {
         var idempotency = Guid.NewGuid().ToString("N");
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
-            { Content = JsonContent.Create(new { amount = 10m, type = "credit", description = "Auditable" }) };
+        { Content = JsonContent.Create(new { amount = 10m, type = "credit", description = "Auditable" }) };
         createRequest.Headers.Add("Idempotency-Key", idempotency);
         createRequest.Headers.Add("X-Actor-Id", "actor-1");
         createRequest.Headers.Add("X-Correlation-Id", "correlation-create");
@@ -31,7 +31,7 @@ public class AuditTrailTests : IClassFixture<CoreApiFactory>
         using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{id}")
         {
             Content = JsonContent.Create(new
-                { amount = 12m, type = "debit", description = "Auditable edit", version = 1 })
+            { amount = 12m, type = "debit", description = "Auditable edit", version = 1 })
         };
         updateRequest.Headers.Add("X-Actor-Id", "actor-2");
         updateRequest.Headers.Add("X-Correlation-Id", "correlation-update");

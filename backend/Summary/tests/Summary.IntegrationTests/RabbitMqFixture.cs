@@ -24,7 +24,7 @@ public sealed class RabbitMqFixture : IAsyncLifetime
             try
             {
                 var connectionFactory = new ConnectionFactory
-                    { Uri = new Uri(Uri), RequestedConnectionTimeout = TimeSpan.FromSeconds(1) };
+                { Uri = new Uri(Uri), RequestedConnectionTimeout = TimeSpan.FromSeconds(1) };
                 using var connection = connectionFactory.CreateConnection();
                 return;
             }
@@ -45,7 +45,10 @@ public sealed class RabbitMqFixture : IAsyncLifetime
     {
         var startInfo = new ProcessStartInfo("docker")
         {
-            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
         foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
         using var process = Process.Start(startInfo) ??

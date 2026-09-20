@@ -33,7 +33,7 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
         CancellationToken cancellationToken)
     {
         var payload = JsonSerializer.Serialize(new
-            { username = request.Username, email = request.Email, enabled = request.Enabled, emailVerified = false });
+        { username = request.Username, email = request.Email, enabled = request.Enabled, emailVerified = false });
         using var response = await SendAsync(HttpMethod.Post, "users",
             new StringContent(payload, Encoding.UTF8, "application/json"), cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Conflict) return null;
@@ -81,11 +81,11 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
     {
         using var response =
             await SendAsync(HttpMethod.Get, $"roles/{Uri.EscapeDataString(role)}", null, cancellationToken);
-        
+
         response.EnsureSuccessStatusCode();
-        
+
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        
+
         return document.RootElement.Clone();
     }
 
@@ -124,7 +124,9 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    ["grant_type"] = "client_credentials", ["client_id"] = clientId, ["client_secret"] = clientSecret
+                    ["grant_type"] = "client_credentials",
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret
                 })
             };
         using var response = await client.SendAsync(request, cancellationToken);

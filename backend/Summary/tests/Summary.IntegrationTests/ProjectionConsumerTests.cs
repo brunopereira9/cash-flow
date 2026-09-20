@@ -87,7 +87,7 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         using var update = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{entryId}")
         {
             Content = JsonContent.Create(new
-                { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 })
+            { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 })
         };
         update.Headers.Add("X-Actor-Id", "rabbit-actor");
         var updated = await coreClient.SendAsync(update);
@@ -98,10 +98,17 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         var obsolete = await summaryClient.PostAsJsonAsync("/internal/events",
             new
             {
-                eventId = Guid.NewGuid(), name = "LedgerEntryUpdated.v1", version = 1,
+                eventId = Guid.NewGuid(),
+                name = "LedgerEntryUpdated.v1",
+                version = 1,
                 entry = new
                 {
-                    id = entryId, amount = 99m, type = "credit", description = "obsolete", businessDate, version = 1,
+                    id = entryId,
+                    amount = 99m,
+                    type = "credit",
+                    description = "obsolete",
+                    businessDate,
+                    version = 1,
                     deleted = false
                 }
             });

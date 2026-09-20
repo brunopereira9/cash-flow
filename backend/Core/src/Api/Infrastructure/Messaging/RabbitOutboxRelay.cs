@@ -39,7 +39,7 @@ public sealed class RabbitOutboxRelay(
             .OrderBy(x => x.OccurredAt).Take(50).ToList();
         if (pending.Count == 0) return;
         var factory = new ConnectionFactory
-            { Uri = new Uri(configuration["RabbitMq:Uri"] ?? "amqp://guest:guest@rabbitmq:5672/") };
+        { Uri = new Uri(configuration["RabbitMq:Uri"] ?? "amqp://guest:guest@rabbitmq:5672/") };
         using var connection = factory.CreateConnection();
         using var channel = connection.CreateModel();
         channel.ExchangeDeclare("cashflow.ledger", ExchangeType.Topic, durable: true);

@@ -61,7 +61,7 @@ internal sealed class SummaryKeycloakProtocolHandler(Func<ProtocolSummaryKeycloa
         request.Headers.Authorization.Parameter == "protocol-admin-token";
 
     private static HttpResponseMessage Response(HttpStatusCode status, string body) => new(status)
-        { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+    { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 }
 
 public sealed class SecuredSummaryApiFactory : MigratedSummaryApiFactory
