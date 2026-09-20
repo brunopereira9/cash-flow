@@ -12,17 +12,21 @@ public class CurrentAuthorizationContractTests
         foreach (var api in new[]
                  {
                      Path.Combine(Root(), "backend", "Core", "src", "Api", "Infrastructure",
-                         "CurrentKeycloakAuthorization.cs"),
+                         "Identity", "CurrentKeycloakAuthorization.cs"),
                      Path.Combine(Root(), "backend", "Summary", "src", "Api", "Infrastructure",
-                         "CurrentKeycloakAuthorization.cs")
+                         "Identity", "CurrentKeycloakAuthorization.cs")
                  })
         {
             var source = File.ReadAllText(api);
-            Assert.Contains("/admin/realms/", source);
-            Assert.Contains("role-mappings/realm", source);
             Assert.Contains("Status503ServiceUnavailable", source);
-            Assert.Contains("!state.Enabled || !state.Roles.Contains(\"operator\")", source);
+            Assert.Contains("!state.Enabled || !HasBusinessRole(state.Roles)", source);
+            Assert.Contains("Status403Forbidden", source);
         }
+
+        var sharedClient = File.ReadAllText(Path.Combine(Root(), "backend", "BuildingBlocks", "Identity",
+            "KeycloakStateClient.cs"));
+        Assert.Contains("/admin/realms/", sharedClient);
+        Assert.Contains("role-mappings/realm", sharedClient);
     }
 
     static string Root() =>
@@ -59,14 +63,15 @@ public class IdentityAccessContractTests
     public void UsesKeycloakAdminApiForUserLifecycleAndRoleAssignment()
     {
         var source = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Api", "Infrastructure",
-            "KeycloakAdminClient.cs"));
-        var program = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Api", "Program.cs"));
+            "Identity", "KeycloakAdminClient.cs"));
+        var controller = File.ReadAllText(Path.Combine(Root(), "backend", "Core", "src", "Api", "Controllers",
+            "IdentityController.cs"));
         Assert.Contains("/admin/realms/", source);
         Assert.Contains("role-mappings/realm", source);
         Assert.Contains("client_credentials", source);
-        Assert.Contains("/identity/users", program);
-        Assert.Contains("state.Roles.Contains(\"admin\")", program);
-        Assert.Contains("last_active_admin", program);
+        Assert.Contains("/identity/users", controller);
+        Assert.Contains("state.Roles.Contains(\"admin\")", controller);
+        Assert.Contains("last_active_admin", controller);
         Assert.Contains("LastActiveAdminException", source);
         Assert.DoesNotContain("keycloak_db", source, StringComparison.OrdinalIgnoreCase);
     }

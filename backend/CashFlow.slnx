@@ -1,4 +1,6 @@
 <Solution>
+  <Folder Name="/BuildingBlocks/" />
+  <Project Path="BuildingBlocks/Identity/CashFlow.BuildingBlocks.Identity.csproj" />
   <Folder Name="/Core/" />
   <Folder Name="/Core/src/">
     <Folder Name="/Core/src/Api/Application/" />

@@ -23,6 +23,6 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\..\BuildingBlocks\Identity\**\*.cs" Link="BuildingBlocks\Identity\%(RecursiveDir)%(Filename)%(Extension)" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Identity\CashFlow.BuildingBlocks.Identity.csproj" />
   </ItemGroup>
 </Project>
