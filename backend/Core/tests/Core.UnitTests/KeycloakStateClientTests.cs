@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Claims;
+using System.Text.Json;
 using CashFlow.BuildingBlocks.Identity;
 using Microsoft.Extensions.Configuration;
 
@@ -90,6 +91,25 @@ public sealed class KeycloakStateClientTests
 
         Assert.Contains("/users/user%2F1", handler.Requests[1].RequestUri!.AbsolutePath,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsMalformedUserStatePayload()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/token", StringComparison.Ordinal))
+                return JsonResponse("{\"access_token\":\"admin-token\"}");
+
+            return JsonResponse("{\"enabled\":\"yes\"}");
+        });
+        var sut = CreateSut(CreateClient(handler));
+        var subject = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", "user-1")],
+            "test"));
+
+        await Assert.ThrowsAsync<JsonException>(
+            () => sut.GetAsync(subject, CancellationToken.None));
     }
 
     private static KeycloakStateClient CreateSut(HttpClient client)
