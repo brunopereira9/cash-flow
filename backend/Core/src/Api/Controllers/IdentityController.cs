@@ -29,10 +29,10 @@ public sealed class IdentityController(
         if (string.IsNullOrWhiteSpace(request.Username) ||
             !SupportedRoles.Contains(request.Role, StringComparer.Ordinal))
         {
-            return ValidationProblem(new Dictionary<string, string[]>
+            return ValidationProblem(new ValidationProblemDetails(new Dictionary<string, string[]>
             {
                 ["user"] = ["username and a supported role are required"]
-            });
+            }));
         }
 
         var user = await admin.CreateUserAsync(request, token);
@@ -53,10 +53,10 @@ public sealed class IdentityController(
 
         if (!SupportedRoles.Contains(request.Role, StringComparer.Ordinal))
         {
-            return ValidationProblem(new Dictionary<string, string[]>
+            return ValidationProblem(new ValidationProblemDetails(new Dictionary<string, string[]>
             {
                 ["role"] = ["unsupported role"]
-            });
+            }));
         }
 
         try
