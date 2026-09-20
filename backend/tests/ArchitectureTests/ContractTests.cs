@@ -1,4 +1,4 @@
-using System.IO;
+namespace ArchitectureTests;
 
 public class CurrentAuthorizationContractTests
 {

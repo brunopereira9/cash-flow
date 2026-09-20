@@ -1,4 +1,4 @@
-namespace CashFlow.Summary.Domain;
+namespace Summary.Api.Domain.Entities;
 
 public sealed class InboxEvent
 {

@@ -1,7 +1,7 @@
-namespace CashFlow.Summary.Infrastructure;
-
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Summary.Api.Infrastructure.Persistence;
+
+namespace Summary.Api.Infrastructure;
 
 public sealed class SummaryDatabaseReadinessCheck(IServiceScopeFactory scopes) : IHealthCheck
 {

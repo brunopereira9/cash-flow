@@ -1,7 +1,7 @@
-namespace CashFlow.Core.Infrastructure;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+
+namespace Core.Api.Infrastructure;
 
 public sealed class DatabaseReadinessCheck<TContext>(IServiceScopeFactory scopes) : IHealthCheck
     where TContext : DbContext

@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="CashFlow.Core.Infrastructure" />
+    <Using Include="Core.Api.Infrastructure.Persistence" />
   </ItemGroup>
 
   <ItemGroup>

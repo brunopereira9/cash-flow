@@ -1,4 +1,6 @@
-namespace CashFlow.Summary.Domain;
+using Summary.Api.Domain.Events;
+
+namespace Summary.Api.Domain.Entities;
 
 public sealed class ProjectedEntry
 {

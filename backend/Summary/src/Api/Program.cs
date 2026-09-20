@@ -1,14 +1,21 @@
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Resources;
-using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Any;
+using Microsoft.OpenApi.Models;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Summary.Api;
+using Summary.Api.Domain.Entities;
+using Summary.Api.Domain.Events;
+using Summary.Api.Infrastructure;
+using Summary.Api.Infrastructure.Identity;
+using Summary.Api.Infrastructure.Messaging;
+using Summary.Api.Infrastructure.Persistence;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,7 +57,7 @@ app.UseCors(); if (keycloakEnabled) { app.UseAuthentication(); app.UseAuthorizat
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "summary" }));
 app.MapHealthChecks("/readyz");
 app.MapPost("/internal/events", async ([FromBody] ProjectionEvent message, ProjectionService projection, CancellationToken token) => await projection.ApplyAsync(message, token) ? Results.Accepted() : Results.Ok(new { duplicate = true }));
-var dailySummary = app.MapGet("/summary/daily/{date}", async (DateOnly date, SummaryDbContext db, IConfiguration config, ILogger<Program> logger, CancellationToken token) =>
+var dailySummary = app.MapGet("/summary/daily/{date}", async (DateOnly date, SummaryDbContext db, IConfiguration config, ILogger<Summary.Api.Program> logger, CancellationToken token) =>
 {
     if (!config.GetValue("Summary:Available", true)) return Results.Json(new { freshnessStatus = "unavailable" }, statusCode: 503);
     var summary = await db.DailySummaries.FindAsync([date], token) ?? DailySummary.Create(date, 0, 0, DateTimeOffset.UtcNow);
@@ -60,19 +67,8 @@ var dailySummary = app.MapGet("/summary/daily/{date}", async (DateOnly date, Sum
 });
 if (keycloakEnabled) dailySummary.RequireAuthorization();
 app.Run();
-public sealed class SummarySwaggerExamplesOperationFilter : IOperationFilter
+
+namespace Summary.Api
 {
-    public void Apply(OpenApiOperation operation, OperationFilterContext context)
-    {
-        var path = context.ApiDescription.RelativePath?.Split('?')[0];
-        if (path is null) return;
-        operation.Tags ??= [new OpenApiTag { Name = path.StartsWith("health") || path.StartsWith("ready") ? "Health" : path.StartsWith("internal") ? "Internal" : "Summary" }];
-        if (path == "healthz" && operation.Responses.TryGetValue("200", out var healthResponse) && healthResponse.Content.TryGetValue("application/json", out var healthContent)) healthContent.Examples["default"] = new OpenApiExample { Value = new OpenApiObject { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("summary") } };
-        if (path == "summary/daily/{date}")
-        {
-            var dateParameter = operation.Parameters.FirstOrDefault(p => p.Name == "date");
-            if (dateParameter is not null) dateParameter.Example = new OpenApiString("2026-09-20");
-        }
-    }
+    public partial class Program;
 }
-public partial class Program;

@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+namespace Summary.IntegrationTests;
+
 public class DailySummaryFreshnessTests : IClassFixture<RabbitMqFixture>
 {
     private readonly RabbitMqFixture rabbit;
@@ -51,9 +53,9 @@ public class DailySummaryFreshnessTests : IClassFixture<RabbitMqFixture>
         if (response.StatusCode != HttpStatusCode.OK) return false;
         var summary = await response.Content.ReadFromJsonAsync<JsonElement>();
         return summary.GetProperty("credits").GetDecimal() == credits &&
-            summary.GetProperty("debits").GetDecimal() == debits &&
-            summary.GetProperty("balance").GetDecimal() == balance &&
-            summary.GetProperty("freshnessStatus").GetString() == "current";
+               summary.GetProperty("debits").GetDecimal() == debits &&
+               summary.GetProperty("balance").GetDecimal() == balance &&
+               summary.GetProperty("freshnessStatus").GetString() == "current";
     }
 
     private static async Task<JsonElement> GetSummaryAsync(HttpClient client, DateOnly date) =>

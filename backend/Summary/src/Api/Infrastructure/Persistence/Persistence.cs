@@ -1,6 +1,7 @@
-namespace CashFlow.Summary.Infrastructure;
-
 using Microsoft.EntityFrameworkCore;
+using Summary.Api.Domain.Entities;
+
+namespace Summary.Api.Infrastructure.Persistence;
 
 public sealed class SummaryDbContext(DbContextOptions<SummaryDbContext> options) : DbContext(options)
 {

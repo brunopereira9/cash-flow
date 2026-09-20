@@ -1,8 +1,10 @@
-namespace CashFlow.Core.Infrastructure;
-
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Core.Api.Application.Interfaces;
+using Core.Api.Application.Models;
+
+namespace Core.Api.Infrastructure.Identity;
 
 public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfiguration configuration) : IKeycloakAdminClient
 {

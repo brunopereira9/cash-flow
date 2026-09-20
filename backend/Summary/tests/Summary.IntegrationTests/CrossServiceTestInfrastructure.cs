@@ -1,14 +1,15 @@
 extern alias CoreApi;
-
-using CoreDbContext = CoreApi::CashFlow.Core.Infrastructure.CoreDbContext;
-using CoreProgram = CoreApi::Program;
+using CoreApi::Core.Api;
+using CoreApi::Core.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-public sealed class CrossServiceCoreApiFactory(string rabbitUri) : WebApplicationFactory<CoreProgram>
+namespace Summary.IntegrationTests;
+
+public sealed class CrossServiceCoreApiFactory(string rabbitUri) : WebApplicationFactory<Program>
 {
     private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-core-cross-service-{Guid.NewGuid():N}.db");
 

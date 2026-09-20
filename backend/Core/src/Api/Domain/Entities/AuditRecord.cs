@@ -1,4 +1,4 @@
-namespace CashFlow.Core.Domain;
+namespace Core.Api.Domain.Entities;
 
 public sealed class AuditRecord
 {

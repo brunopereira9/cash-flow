@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Summary.Api.Domain.Entities;
+using Summary.Api.Infrastructure.Persistence;
+
+namespace Summary.IntegrationTests;
+
 public class DailySummaryAvailabilityTests
 {
     [Fact]

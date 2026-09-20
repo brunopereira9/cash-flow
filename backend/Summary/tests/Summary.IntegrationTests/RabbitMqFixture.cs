@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using RabbitMQ.Client;
 
+namespace Summary.IntegrationTests;
+
 public sealed class RabbitMqFixture : IAsyncLifetime
 {
     private string? containerId;

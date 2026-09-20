@@ -1,9 +1,9 @@
-namespace CashFlow.Summary.Infrastructure;
-
-using Microsoft.AspNetCore.Authentication;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication;
+
+namespace Summary.Api.Infrastructure.Identity;
 
 public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, IConfiguration configuration) : ICurrentKeycloakAuthorization
 {

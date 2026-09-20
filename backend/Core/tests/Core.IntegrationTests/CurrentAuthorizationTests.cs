@@ -1,11 +1,11 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Diagnostics;
 using System.Text;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
+
+namespace Core.IntegrationTests;
 
 public class CurrentAuthorizationTests : IClassFixture<SecuredCoreApiFactory>
 {
@@ -46,7 +46,7 @@ internal sealed class KeycloakProtocolHandler(Func<ProtocolCurrentKeycloakState>
                     ? $"{{\"enabled\":{current.Enabled.ToString().ToLowerInvariant()}}}"
                     : "{}";
         var response = new HttpResponseMessage(path.Contains("/admin/realms/", StringComparison.Ordinal) || path.EndsWith("/token", StringComparison.Ordinal) ? System.Net.HttpStatusCode.OK : System.Net.HttpStatusCode.NotFound)
-        { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         return Task.FromResult(response);
     }
 }

@@ -1,6 +1,8 @@
-namespace CashFlow.Summary.Infrastructure;
-
 using Microsoft.EntityFrameworkCore;
+using Summary.Api.Domain.Entities;
+using Summary.Api.Domain.Events;
+
+namespace Summary.Api.Infrastructure.Persistence;
 
 public sealed class ProjectionService(SummaryDbContext db)
 {

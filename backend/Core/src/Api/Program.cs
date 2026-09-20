@@ -1,15 +1,24 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
+using Core.Api;
+using Core.Api.Application.Interfaces;
+using Core.Api.Application.Models;
+using Core.Api.Domain.Entities;
+using Core.Api.Domain.Events;
+using Core.Api.Infrastructure;
+using Core.Api.Infrastructure.Identity;
+using Core.Api.Infrastructure.Messaging;
+using Core.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Resources;
-using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Any;
+using Microsoft.OpenApi.Models;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,7 +72,7 @@ app.UseCors(); if (keycloakEnabled) { app.UseAuthentication(); app.UseAuthorizat
 app.Use(async (ctx, next) => { ctx.Response.Headers["X-Correlation-Id"] = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N"); await next(); });
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
-var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Program> logger, CancellationToken token) =>
+var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Core.Api.Program> logger, CancellationToken token) =>
 {
     var errors = EntryValidation.Validate(request); var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault(); if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"]; if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
     var actor = Actor(http); var date = request.BusinessDate ?? Today(); var intent = $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
@@ -143,25 +152,11 @@ static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, stri
 static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? context.User.FindFirst("sub")?.Value ?? "demo-operator";
 static string Correlation(HttpContext context) => context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
 static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
-public sealed class CoreSwaggerExamplesOperationFilter : IOperationFilter
+
+namespace Core.Api
 {
-    public void Apply(OpenApiOperation operation, OperationFilterContext context)
-    {
-        var path = context.ApiDescription.RelativePath?.Split('?')[0];
-        if (path is null) return;
-        operation.Tags ??= [new OpenApiTag { Name = path.StartsWith("identity") ? "Identity" : path.StartsWith("audit") ? "Audit" : path.StartsWith("health") || path.StartsWith("ready") ? "Health" : "Ledger" }];
-        if (path == "ledger/entries" && context.ApiDescription.HttpMethod == "POST")
-        {
-            if (operation.RequestBody?.Content.TryGetValue("application/json", out var requestContent) == true)
-                requestContent.Examples["default"] = new OpenApiExample { Summary = "Novo lançamento", Value = new OpenApiObject { ["amount"] = new OpenApiDouble(149.90), ["type"] = new OpenApiString("expense"), ["description"] = new OpenApiString("Compra de materiais"), ["businessDate"] = new OpenApiString("2026-09-20") } };
-        }
-        if (path == "ledger/entries" && context.ApiDescription.HttpMethod == "GET")
-            if (operation.Responses.TryGetValue("200", out var response) && response.Content.TryGetValue("application/json", out var responseContent))
-                responseContent.Examples["default"] = new OpenApiExample { Value = new OpenApiArray { new OpenApiObject { ["id"] = new OpenApiString("7d9f3e1a-1b4f-4d2f-9a0b-123456789abc"), ["amount"] = new OpenApiDouble(149.90), ["type"] = new OpenApiString("expense"), ["description"] = new OpenApiString("Compra de materiais"), ["businessDate"] = new OpenApiString("2026-09-20"), ["version"] = new OpenApiInteger(1), ["deleted"] = new OpenApiBoolean(false) } } };
-        if (path == "healthz" && operation.Responses.TryGetValue("200", out var healthResponse) && healthResponse.Content.TryGetValue("application/json", out var healthContent)) healthContent.Examples["default"] = new OpenApiExample { Value = new OpenApiObject { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("core") } };
-    }
+    public partial class Program;
+    public record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
+    public record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);
+    public static class EntryValidation { public static Dictionary<string, string[]> Validate(dynamic request) { var errors = new Dictionary<string, string[]>(); if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount) errors["Amount"] = ["must be positive with at most two decimal places"]; if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"]; if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"]; if (request.BusinessDate is DateOnly date && date > DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"))) errors["BusinessDate"] = ["cannot be in the future"]; return errors; } }
 }
-public partial class Program;
-public record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
-public record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);
-public static class EntryValidation { public static Dictionary<string, string[]> Validate(dynamic request) { var errors = new Dictionary<string, string[]>(); if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount) errors["Amount"] = ["must be positive with at most two decimal places"]; if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"]; if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"]; if (request.BusinessDate is DateOnly date && date > Today()) errors["BusinessDate"] = ["cannot be in the future"]; return errors; } private static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo")); }

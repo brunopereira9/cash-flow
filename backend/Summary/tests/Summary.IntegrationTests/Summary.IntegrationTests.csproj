@@ -21,8 +21,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="CashFlow.Summary.Infrastructure" />
-    <Using Include="CashFlow.Summary.Domain" />
+    <Using Include="Summary.Api.Infrastructure.Persistence" />
+    <Using Include="Summary.Api.Domain.Entities" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Api\Summary.Api.csproj" />

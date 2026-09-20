@@ -2,10 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Summary.Api.Infrastructure.Persistence;
+
+namespace Summary.IntegrationTests;
+
 public class SummaryApiFactory : MigratedSummaryApiFactory
 {
     public bool Available { get; init; } = true;

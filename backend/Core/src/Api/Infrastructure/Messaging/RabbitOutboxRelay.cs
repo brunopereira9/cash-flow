@@ -1,11 +1,11 @@
-namespace CashFlow.Core.Infrastructure;
-
 using System.Text;
+using Core.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry;
-using OpenTelemetry.Context;
 using OpenTelemetry.Context.Propagation;
 using RabbitMQ.Client;
+
+namespace Core.Api.Infrastructure.Messaging;
 
 public sealed class RabbitOutboxRelay(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<RabbitOutboxRelay> logger) : BackgroundService
 {

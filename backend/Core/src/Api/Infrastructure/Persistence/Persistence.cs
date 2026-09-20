@@ -1,6 +1,7 @@
-namespace CashFlow.Core.Infrastructure;
-
+using Core.Api.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+
+namespace Core.Api.Infrastructure.Persistence;
 
 public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : DbContext(options)
 {

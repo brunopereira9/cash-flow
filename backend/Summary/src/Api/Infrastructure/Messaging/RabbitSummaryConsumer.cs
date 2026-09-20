@@ -1,12 +1,12 @@
-namespace CashFlow.Summary.Infrastructure;
-
 using System.Text;
 using System.Text.Json;
-using OpenTelemetry;
-using OpenTelemetry.Context;
 using OpenTelemetry.Context.Propagation;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Summary.Api.Domain.Events;
+using Summary.Api.Infrastructure.Persistence;
+
+namespace Summary.Api.Infrastructure.Messaging;
 
 public sealed class RabbitSummaryConsumer(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<RabbitSummaryConsumer> logger) : BackgroundService
 {

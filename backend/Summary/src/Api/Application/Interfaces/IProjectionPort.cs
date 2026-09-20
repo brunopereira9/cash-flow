@@ -1,4 +1,6 @@
-namespace CashFlow.Summary.Application;
+using Summary.Api.Domain.Events;
+
+namespace Summary.Api.Application.Interfaces;
 
 public interface IProjectionPort
 {

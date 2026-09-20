@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
+namespace Core.IntegrationTests;
+
 public class AuditTrailTests : IClassFixture<CoreApiFactory>
 {
     private readonly HttpClient client;
