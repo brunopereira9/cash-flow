@@ -1,3 +1,5 @@
+namespace CashFlow.Summary.Infrastructure;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 

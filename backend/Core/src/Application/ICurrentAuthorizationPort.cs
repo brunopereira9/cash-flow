@@ -1,6 +1,6 @@
-using System.Security.Claims;
+namespace CashFlow.Core.Application;
 
-public sealed record CurrentAuthorizationSnapshot(bool Enabled, IReadOnlySet<string> Roles);
+using System.Security.Claims;
 
 public interface ICurrentAuthorizationPort
 {

@@ -1,6 +1,6 @@
 extern alias CoreApi;
 
-using CoreDbContext = CoreApi::CoreDbContext;
+using CoreDbContext = CoreApi::CashFlow.Core.Infrastructure.CoreDbContext;
 using CoreProgram = CoreApi::Program;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

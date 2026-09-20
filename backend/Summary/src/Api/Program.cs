@@ -53,8 +53,8 @@ app.MapPost("/internal/events", async ([FromBody] ProjectionEvent message, Proje
 var dailySummary = app.MapGet("/summary/daily/{date}", async (DateOnly date, SummaryDbContext db, IConfiguration config, ILogger<Program> logger, CancellationToken token) =>
 {
     if (!config.GetValue("Summary:Available", true)) return Results.Json(new { freshnessStatus = "unavailable" }, statusCode: 503);
-    var summary = await db.DailySummaries.FindAsync([date], token) ?? new DailySummary { Date = date, AsOf = DateTimeOffset.UtcNow };
-    var threshold = TimeSpan.FromSeconds(config.GetValue("Summary:FreshnessSeconds", 30)); summary.FreshnessStatus = DateTimeOffset.UtcNow - summary.AsOf > threshold ? "stale" : "current";
+    var summary = await db.DailySummaries.FindAsync([date], token) ?? DailySummary.Create(date, 0, 0, DateTimeOffset.UtcNow);
+    var threshold = TimeSpan.FromSeconds(config.GetValue("Summary:FreshnessSeconds", 30)); summary.MarkFreshness(DateTimeOffset.UtcNow - summary.AsOf > threshold ? "stale" : "current");
     logger.LogInformation("Business event {BusinessEvent} read for {BusinessDate} with freshness {FreshnessStatus}", "summary.daily.read", date, summary.FreshnessStatus);
     return Results.Ok(summary);
 });

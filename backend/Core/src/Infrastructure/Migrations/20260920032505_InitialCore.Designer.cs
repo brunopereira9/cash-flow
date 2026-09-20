@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Core.Api.Migrations
+namespace CashFlow.Core.Api.Migrations
 {
     [DbContext(typeof(CoreDbContext))]
     [Migration("20260920032505_InitialCore")]

@@ -72,7 +72,12 @@ var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest reque
     await using var transaction = await db.Database.BeginTransactionAsync(token); db.LedgerEntries.Add(entry); db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry }); AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); logger.LogInformation("Business event {BusinessEvent} published with {EntryId}, {Amount}, {EntryType}, {ActorId}", "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
     return Results.Created($"/ledger/entries/{entry.Id}", entry);
 });
-var listEntries = app.MapGet("/ledger/entries", async (CoreDbContext db, CancellationToken token) => Results.Ok(await db.LedgerEntries.Where(x => !x.Deleted).OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token)));
+var listEntries = app.MapGet("/ledger/entries", async (DateOnly? date, CoreDbContext db, CancellationToken token) =>
+{
+    var query = db.LedgerEntries.Where(x => !x.Deleted);
+    if (date.HasValue) query = query.Where(x => x.BusinessDate == date.Value);
+    return Results.Ok(await query.OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token));
+});
 var updateEntry = app.MapPut("/ledger/entries/{id:guid}", async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
 {
     var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token); if (current is null || current.Deleted) return Results.NotFound(); if (request.Version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version }); var errors = EntryValidation.Validate(request); if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);

@@ -1,17 +1,8 @@
+namespace CashFlow.Core.Infrastructure;
+
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-
-public sealed record ManagedUser(string Id, string Username, string? Email, bool Enabled, string Role);
-public sealed record CreateManagedUserRequest(string Username, string? Email, string Role, bool Enabled = true);
-public sealed record UpdateManagedUserRequest(string? Email, string Role, bool Enabled);
-
-public interface IKeycloakAdminClient
-{
-    Task<IReadOnlyList<ManagedUser>> ListUsersAsync(CancellationToken cancellationToken);
-    Task<ManagedUser?> CreateUserAsync(CreateManagedUserRequest request, CancellationToken cancellationToken);
-    Task<bool> UpdateUserAsync(string id, UpdateManagedUserRequest request, CancellationToken cancellationToken);
-}
 
 public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfiguration configuration) : IKeycloakAdminClient
 {
@@ -109,5 +100,3 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
         return ($"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath[..index]}", uri.AbsolutePath[(index + marker.Length)..]);
     }
 }
-
-public sealed class LastActiveAdminException : Exception;

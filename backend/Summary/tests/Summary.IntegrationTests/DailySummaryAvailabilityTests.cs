@@ -19,7 +19,7 @@ public class DailySummaryAvailabilityTests
         using (var scope = staleFactory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SummaryDbContext>();
-            db.DailySummaries.Add(new DailySummary { Date = new DateOnly(2026, 9, 19), Credits = 10m, Balance = 10m, AsOf = DateTimeOffset.UtcNow.AddSeconds(-31) });
+            db.DailySummaries.Add(DailySummary.Create(new DateOnly(2026, 9, 19), 10m, 0m, DateTimeOffset.UtcNow.AddSeconds(-31)));
             await db.SaveChangesAsync();
         }
         var stale = await (await staleClient.GetAsync("/summary/daily/2026-09-19")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();

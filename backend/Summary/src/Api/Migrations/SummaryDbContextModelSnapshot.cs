@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Summary.Api.Migrations
+namespace CashFlow.Summary.Api.Migrations
 {
     [DbContext(typeof(SummaryDbContext))]
     partial class SummaryDbContextModelSnapshot : ModelSnapshot

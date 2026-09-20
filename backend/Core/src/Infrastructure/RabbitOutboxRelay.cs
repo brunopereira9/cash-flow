@@ -1,3 +1,5 @@
+namespace CashFlow.Core.Infrastructure;
+
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry;

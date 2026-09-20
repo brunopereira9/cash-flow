@@ -1,3 +1,5 @@
+namespace CashFlow.Core.Infrastructure;
+
 using Microsoft.EntityFrameworkCore;
 
 public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : DbContext(options)

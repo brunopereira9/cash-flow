@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Core.Api.Migrations
+namespace CashFlow.Core.Api.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCore : Migration

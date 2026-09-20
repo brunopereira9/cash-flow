@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Summary.Api.Migrations
+namespace CashFlow.Summary.Api.Migrations
 {
     /// <inheritdoc />
     public partial class InitialSummary : Migration

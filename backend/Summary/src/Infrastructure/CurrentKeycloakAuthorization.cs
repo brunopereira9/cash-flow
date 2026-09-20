@@ -1,11 +1,9 @@
+namespace CashFlow.Summary.Infrastructure;
+
 using Microsoft.AspNetCore.Authentication;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
-
-public sealed record CurrentKeycloakState(bool Enabled, IReadOnlySet<string> Roles);
-
-public interface ICurrentKeycloakAuthorization { Task<CurrentKeycloakState> ConfirmAsync(ClaimsPrincipal principal, CancellationToken requestToken); }
 
 public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, IConfiguration configuration) : ICurrentKeycloakAuthorization
 {

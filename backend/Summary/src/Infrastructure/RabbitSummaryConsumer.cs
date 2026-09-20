@@ -1,3 +1,5 @@
+namespace CashFlow.Summary.Infrastructure;
+
 using System.Text;
 using System.Text.Json;
 using OpenTelemetry;
