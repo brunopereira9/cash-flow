@@ -1,0 +1,20 @@
+{
+  "realm": "cashflow",
+  "enabled": true,
+  "accessTokenLifespan": 3600,
+  "clients": [
+    {"clientId": "cashflow-front", "publicClient": true, "directAccessGrantsEnabled": true, "standardFlowEnabled": true, "redirectUris": ["http://localhost:5173/*"], "webOrigins": ["http://localhost:5173"], "protocolMappers": [{"name": "cashflow-front-audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "config": {"included.client.audience": "cashflow-front", "id.token.claim": "false", "access.token.claim": "true", "userinfo.token.claim": "false"}}]},
+    {"clientId": "cashflow-api", "secret": "local-cashflow-api-secret", "publicClient": false, "serviceAccountsEnabled": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false},
+    {"clientId": "cashflow-summary", "secret": "local-cashflow-summary-secret", "publicClient": false, "serviceAccountsEnabled": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false},
+    {"clientId": "cashflow-admin", "secret": "local-cashflow-admin-secret", "publicClient": false, "serviceAccountsEnabled": true, "standardFlowEnabled": false, "directAccessGrantsEnabled": false}
+  ],
+  "users": [
+    {"username": "demo-admin", "enabled": true, "email": "demo-admin@cashflow.local", "emailVerified": true, "firstName": "Demo", "lastName": "Admin", "requiredActions": [], "credentials": [{"type": "password", "value": "username123", "temporary": false}], "realmRoles": ["admin"]},
+    {"username": "demo-operator", "enabled": true, "email": "demo-operator@cashflow.local", "emailVerified": true, "firstName": "Demo", "lastName": "Operator", "requiredActions": [], "credentials": [{"type": "password", "value": "username123", "temporary": false}], "realmRoles": ["operator"]},
+    {"username": "demo-auditor", "enabled": true, "email": "demo-auditor@cashflow.local", "emailVerified": true, "firstName": "Demo", "lastName": "Auditor", "requiredActions": [], "credentials": [{"type": "password", "value": "username123", "temporary": false}], "realmRoles": ["auditor"]},
+    {"username": "service-account-cashflow-api", "enabled": true, "serviceAccountClientId": "cashflow-api", "clientRoles": {"realm-management": ["query-users", "view-users"]}},
+    {"username": "service-account-cashflow-summary", "enabled": true, "serviceAccountClientId": "cashflow-summary", "clientRoles": {"realm-management": ["query-users", "view-users"]}},
+    {"username": "service-account-cashflow-admin", "enabled": true, "serviceAccountClientId": "cashflow-admin", "clientRoles": {"realm-management": ["query-users", "view-users", "manage-users", "view-realm"]}}
+  ],
+  "roles": {"realm": [{"name": "admin"}, {"name": "operator"}, {"name": "auditor"}]}
+}

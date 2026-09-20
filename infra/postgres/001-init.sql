@@ -1,0 +1,3 @@
+CREATE DATABASE core_db;
+CREATE DATABASE summary_db;
+CREATE DATABASE keycloak_db;

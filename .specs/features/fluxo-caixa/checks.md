@@ -3,7 +3,7 @@
 Profile: light
 Plan: `.specs/features/fluxo-caixa/plan.md`
 
-13 checks em 4 slices · 6 one-way doors · 0 questões abertas.
+23 checks em 5 slices · 6 one-way doors · 0 questões abertas.
 
 ## Checks
 
@@ -41,10 +41,10 @@ Proof: `dotnet test backend/Core/tests/Core.IntegrationTests/Core.IntegrationTes
 Proof: `dotnet test backend/Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj --filter FullyQualifiedName~CurrentAuthorizationTests.FailsClosedWhenKeycloakCannotConfirmState`
 
 **C10** - A requisição seguinte após desativação de conta ou alteração de papel aplica o estado atual do Keycloak nas APIs Core e Summary, mesmo com JWT antigo.
-Proof: `dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --filter FullyQualifiedName~CurrentAuthorizationContractTests.EnforcesCurrentKeycloakStateInBothApis`
+Proof: `dotnet test backend/Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj --filter FullyQualifiedName~CurrentRoleTests.AppliesDisabledAccountAndRoleChangeOnTheNextRequestWithTheSameJwt && dotnet test backend/Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj --filter FullyQualifiedName~SummaryCurrentAuthorizationTests.AppliesCurrentAccountStateAndRoleToTheNextSummaryRequest`
 
 **C11** - O Compose sobe frontend, Core, Summary, PostgreSQL, RabbitMQ, Keycloak e Collector; migrations, realm seed e reset são comandos documentados e explícitos.
-Proof: `dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --filter FullyQualifiedName~LocalEnvironmentContractTests.DeclaresAllRequiredComposeServicesAndCommands`
+Proof: `$env:KEYCLOAK_URL='http://host.docker.internal:18081'; docker compose --file infra/compose/compose.yaml up --build -d --wait && docker compose --profile load --file infra/compose/compose.yaml run --rm -e KEYCLOAK_URL load k6 run --vus 1 --duration 1s infra/load/daily-summary-50rps.js && docker compose --file infra/compose/compose.yaml down -v`
 
 ### S4 - Carga e interface
 
@@ -52,7 +52,39 @@ Proof: `dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --f
 Proof: `docker compose --file infra/compose/compose.yaml run --rm load k6 run --tag testid=FC12 infra/load/daily-summary-50rps.js`
 
 **C13** - As views web usam os tokens, componentes, tipografia, cores, espaçamento e estados definidos em `.design/Frontend/DESIGN_SYSTEM.md`.
-Proof: `npm --prefix front run test -- --runInBand front/tests/design-system-contract.test.tsx`
+Proof: `npm --prefix front run test -- --runInBand front/tests/design-system-contract.test.tsx && npm --prefix front run build && npm --prefix front run test:e2e`
+
+### S5 - Conformidade RFC/ADR e operação
+
+**C23** - Os bounded contexts backend `Ledger`, `Identity/Access` e `Summary/Projection` possuem modelos e portas próprias, não compartilham entidades EF/DTOs e cruzam fronteiras somente por contratos/eventos.
+Proof: `dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --filter FullyQualifiedName~BoundedContextDependencyTests`
+
+**C22** - O frontend mantém `app`, `features`, `components` e `lib`, possui as áreas planejadas (`auth`, `summary`, `users`, `audit`, `ledger`) e não introduz camadas Clean/Hexagonal proibidas.
+Proof: `python tools/validate_frontend_architecture.py`
+
+**C14** - Core e Summary possuem `Domain`, `Application`, `Infrastructure` e `Api`, com dependências apontando para o núcleo conforme ADR-005.
+Proof: `python tools/validate_architecture.py --structure`
+
+**C15** - Cada processo possui migrations EF Core versionadas e não executa `EnsureCreated` no runtime.
+Proof: `python tools/validate_architecture.py --persistence`
+
+**C16** - APIs e consumidores configuram OpenTelemetry/Collector com amostragem configurável e 100% em carga/teste.
+Proof: `python tools/validate_architecture.py --observability`
+
+**C17** - Core, Summary e administração usam credenciais de serviço distintas e nenhum processo consulta tabelas internas do Keycloak.
+Proof: `python tools/validate_architecture.py --identity-boundary`
+
+**C18** - O realm seed cria usuários demo distintos `admin`, `operator` e `auditor`, com risco local documentado.
+Proof: `python tools/validate_architecture.py --identity-seed`
+
+**C19** - Compose declara health/readiness verificável para todos os serviços requeridos e os comandos de teste aguardam saúde.
+Proof: `python tools/validate_architecture.py --compose-health`
+
+**C20** - Contratos de eventos e telemetria são versionados e não expõem credenciais, tokens, segredos ou valores financeiros brutos.
+Proof: `python tools/validate_architecture.py --event-safety`
+
+**C21** - A documentação operacional usa as portas e comandos reais do Compose e descreve migrations, seed, token e reset.
+Proof: `python tools/validate_architecture.py --docs`
 
 ## Coverage
 

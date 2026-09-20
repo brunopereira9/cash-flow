@@ -3,8 +3,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-public sealed class CoreApiFactory : WebApplicationFactory<Program>
+public sealed class CoreApiFactory : MigratedCoreApiFactory
 {
     private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-core-{Guid.NewGuid():N}.db");
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -13,33 +16,55 @@ public sealed class CoreApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Core", $"Data Source={database}");
         builder.UseSetting("RabbitMq:Enabled", "false");
     }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+        using var scope = host.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<CoreDbContext>().Database.Migrate();
+        return host;
+    }
+
+    public async Task<T> ReadDbAsync<T>(Func<CoreDbContext, Task<T>> query)
+    {
+        using var scope = Services.CreateScope();
+        return await query(scope.ServiceProvider.GetRequiredService<CoreDbContext>());
+    }
 }
+
+public sealed record DbCounts(int Entries, int Attempts, int Audits, int Outbox);
 
 public class LedgerEntryCreationTests : IClassFixture<CoreApiFactory>
 {
     private readonly HttpClient client;
-    public LedgerEntryCreationTests(CoreApiFactory factory) => client = factory.CreateClient();
+    private readonly CoreApiFactory factory;
+    public LedgerEntryCreationTests(CoreApiFactory factory) { this.factory = factory; client = factory.CreateClient(); }
 
     [Fact]
     public async Task AcceptsValidEntryAndDefaultsBusinessDate()
     {
-        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        var response = await client.PostAsJsonAsync("/ledger/entries", new { amount = 10.00m, type = "credit", description = "Salary" });
+        var response = await PostAsync(new { amount = 10.00m, type = "credit", description = "Salary" });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var entry = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("credit", entry.GetProperty("type").GetString());
         Assert.Equal(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo")), DateOnly.Parse(entry.GetProperty("businessDate").GetString()!));
-        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsJsonAsync("/ledger/entries", new { amount = 1.234m, type = "credit", description = "bad" })).StatusCode);
-        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsJsonAsync("/ledger/entries", new { amount = 2m, type = "credit", description = "future", businessDate = "2099-01-01" })).StatusCode);
+
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync(new { amount = 2m, type = "debit", description = "Today", businessDate = today })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync(new { amount = 3.45m, type = "credit", description = "Past", businessDate = today.AddDays(-1) })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 0m, type = "credit", description = "bad" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = -1m, type = "credit", description = "bad" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 1.234m, type = "credit", description = "bad" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "", description = "bad" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "credit", description = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "credit", description = "future", businessDate = today.AddDays(1) })).StatusCode);
     }
 
     [Fact]
     public async Task RejectsInvalidEntry()
     {
-        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
-        var response = await client.PostAsJsonAsync("/ledger/entries", new { amount = -1m, type = "", description = "" });
+        var response = await PostAsync(new { amount = -1m, type = "", description = "" });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
@@ -47,14 +72,37 @@ public class LedgerEntryCreationTests : IClassFixture<CoreApiFactory>
     public async Task IsIdempotentByActorAndAttemptKey()
     {
         var key = Guid.NewGuid().ToString("N");
-        client.DefaultRequestHeaders.Add("Idempotency-Key", key);
         var request = new { amount = 12.50m, type = "debit", description = "Rent" };
-        var first = await client.PostAsJsonAsync("/ledger/entries", request);
-        var second = await client.PostAsJsonAsync("/ledger/entries", request);
-        var changed = await client.PostAsJsonAsync("/ledger/entries", new { amount = 13m, type = "debit", description = "Rent" });
+        var before = await ReadCountsAsync();
+        var first = await PostAsync(request, key, "actor-1");
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var second = await PostAsync(request, key, "actor-1");
+        var changed = await PostAsync(new { amount = 13m, type = "debit", description = "Rent" }, key, "actor-1");
+        var otherActor = await PostAsync(request, key, "actor-2");
+        var after = await ReadCountsAsync();
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
-        Assert.Equal((await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid(), (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.Created, otherActor.StatusCode);
+        Assert.Equal(firstBody.GetProperty("id").GetGuid(), (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        Assert.NotEqual(firstBody.GetProperty("id").GetGuid(), (await otherActor.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        Assert.Equal(before.Entries + 2, after.Entries);
+        Assert.Equal(before.Attempts + 2, after.Attempts);
+        Assert.Equal(before.Audits + 2, after.Audits);
+        Assert.Equal(before.Outbox + 2, after.Outbox);
     }
+
+    private async Task<HttpResponseMessage> PostAsync(object payload, string? key = null, string actor = "creation-actor")
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries") { Content = JsonContent.Create(payload) };
+        request.Headers.Add("Idempotency-Key", key ?? Guid.NewGuid().ToString("N"));
+        request.Headers.Add("X-Actor-Id", actor);
+        return await client.SendAsync(request);
+    }
+
+    private Task<DbCounts> ReadCountsAsync() => factory.ReadDbAsync(async db => new DbCounts(
+        await db.LedgerEntries.CountAsync(),
+        await db.CreationAttempts.CountAsync(),
+        await db.AuditRecords.CountAsync(),
+        await db.OutboxEvents.CountAsync()));
 }

@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/Core/" />
   <Folder Name="/Core/src/">
-    <Project Path="Core/src/Core.Api/Core.Api.csproj" />
+    <Project Path="Core/src/Api/Core.Api.csproj" />
   </Folder>
   <Folder Name="/Core/tests/">
     <Project Path="Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj" />
@@ -9,7 +9,7 @@
   </Folder>
   <Folder Name="/Summary/" />
   <Folder Name="/Summary/src/">
-    <Project Path="Summary/src/Summary.Api/Summary.Api.csproj" />
+    <Project Path="Summary/src/Api/Summary.Api.csproj" />
   </Folder>
   <Folder Name="/Summary/tests/">
     <Project Path="Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj" />

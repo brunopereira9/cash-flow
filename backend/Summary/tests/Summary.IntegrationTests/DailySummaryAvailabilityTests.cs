@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 public class DailySummaryAvailabilityTests
 {
     [Fact]
@@ -14,10 +16,16 @@ public class DailySummaryAvailabilityTests
 
         using var staleFactory = new StaleSummaryApiFactory();
         using var staleClient = staleFactory.CreateClient();
-        await staleClient.PostAsJsonAsync("/internal/events", new { eventId = Guid.NewGuid(), name = "LedgerEntryCreated.v1", version = 1, entry = new { id = Guid.NewGuid(), amount = 10m, type = "credit", description = "old", businessDate = "2026-09-19", version = 1, deleted = false } });
-        await Task.Delay(20);
+        using (var scope = staleFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SummaryDbContext>();
+            db.DailySummaries.Add(new DailySummary { Date = new DateOnly(2026, 9, 19), Credits = 10m, Balance = 10m, AsOf = DateTimeOffset.UtcNow.AddSeconds(-31) });
+            await db.SaveChangesAsync();
+        }
         var stale = await (await staleClient.GetAsync("/summary/daily/2026-09-19")).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("stale", stale.GetProperty("freshnessStatus").GetString());
+        Assert.Equal(10m, stale.GetProperty("balance").GetDecimal());
+        Assert.NotEqual("current", stale.GetProperty("freshnessStatus").GetString());
     }
 }
 

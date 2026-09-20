@@ -1,34 +1,116 @@
 services:
+  core-migrations:
+    build:
+      context: ../../backend/Core
+      dockerfile: src/Api/Dockerfile
+    command: ["--migrate"]
+    restart: "no"
+    environment:
+      ConnectionStrings__Core: Host=postgres;Database=core_db;Username=cashflow;Password=local
+      Database__Provider: Postgres
+    depends_on:
+      postgres: { condition: service_healthy }
+  summary-migrations:
+    build:
+      context: ../../backend/Summary
+      dockerfile: src/Api/Dockerfile
+    command: ["--migrate"]
+    restart: "no"
+    environment:
+      ConnectionStrings__Summary: Host=postgres;Database=summary_db;Username=cashflow;Password=local
+      Database__Provider: Postgres
+    depends_on:
+      postgres: { condition: service_healthy }
   core:
-    build: ../../backend/Core/src/Core.Api
+    build:
+      context: ../../backend/Core
+      dockerfile: src/Api/Dockerfile
     ports: ["5080:8080"]
     environment:
       ConnectionStrings__Core: Host=postgres;Database=core_db;Username=cashflow;Password=local
       RabbitMq__Enabled: "true"
       RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
-    depends_on: [postgres, rabbitmq]
+      Keycloak__Enabled: "true"
+      Keycloak__Authority: http://host.docker.internal:18081/realms/cashflow
+      Keycloak__Issuer: http://localhost:18081/realms/cashflow
+      Keycloak__Audience: cashflow-front
+      Keycloak__AdminClientId: cashflow-api
+      Keycloak__AdminClientSecret: local-cashflow-api-secret
+      Keycloak__UserAdminClientId: cashflow-admin
+      Keycloak__UserAdminClientSecret: local-cashflow-admin-secret
+      Keycloak__CurrentStateTimeoutSeconds: "2"
+      Telemetry__SamplingRatio: "1.0"
+      OTEL_SERVICE_NAME: cashflow-core
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck: { test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"], interval: 10s, timeout: 5s, retries: 12, start_period: 20s }
+    depends_on:
+      core-migrations: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+      collector: { condition: service_healthy }
   summary:
-    build: ../../backend/Summary/src/Summary.Api
+    build:
+      context: ../../backend/Summary
+      dockerfile: src/Api/Dockerfile
     ports: ["5081:8080"]
     environment:
       ConnectionStrings__Summary: Host=postgres;Database=summary_db;Username=cashflow;Password=local
       RabbitMq__Enabled: "true"
       RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
-    depends_on: [postgres, rabbitmq]
+      Keycloak__Enabled: "true"
+      Keycloak__Authority: http://host.docker.internal:18081/realms/cashflow
+      Keycloak__Issuer: http://localhost:18081/realms/cashflow
+      Keycloak__Audience: cashflow-front
+      Keycloak__AdminClientId: cashflow-summary
+      Keycloak__AdminClientSecret: local-cashflow-summary-secret
+      Keycloak__CurrentStateTimeoutSeconds: "2"
+      Telemetry__SamplingRatio: "1.0"
+      OTEL_SERVICE_NAME: cashflow-summary
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck: { test: ["CMD-SHELL", "curl -fsS http://localhost:8080/readyz || exit 1"], interval: 10s, timeout: 5s, retries: 12, start_period: 20s }
+    depends_on:
+      summary-migrations: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+      collector: { condition: service_healthy }
   frontend:
     build: ../../front
     ports: ["5173:80"]
+    healthcheck: { test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ || exit 1"], interval: 10s, timeout: 5s, retries: 12, start_period: 10s }
   postgres:
     image: postgres:16-alpine
     volumes: ["../../infra/postgres:/docker-entrypoint-initdb.d:ro"]
     environment: { POSTGRES_PASSWORD: local, POSTGRES_USER: cashflow }
-  rabbitmq: { image: rabbitmq:3-management-alpine }
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cashflow -d postgres"], interval: 10s, timeout: 5s, retries: 12 }
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 12 }
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
+    ports: ["18081:8080"]
     command: start-dev --import-realm
     volumes: ["../../infra/keycloak:/opt/keycloak/data/import:ro"]
-    environment: { KC_BOOTSTRAP_ADMIN_USERNAME: admin, KC_BOOTSTRAP_ADMIN_PASSWORD: username123, KC_DB: postgres, KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db, KC_DB_USERNAME: cashflow, KC_DB_PASSWORD: local }
-  collector: { image: otel/opentelemetry-collector:latest }
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: username123
+      KC_HOSTNAME: http://localhost:18081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: cashflow
+      KC_DB_PASSWORD: local
+    healthcheck: { test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080"], interval: 10s, timeout: 5s, retries: 18, start_period: 30s }
+  collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    env_file: [../.env.local]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes: ["../../infra/observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro"]
+    ports: ["4317:4317", "4318:4318"]
+    healthcheck: { test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"], interval: 10s, timeout: 5s, retries: 12, start_period: 10s }
   load:
     image: grafana/k6:0.54.0
     profiles: ["load"]
@@ -36,4 +118,4 @@ services:
     working_dir: /workspace
     volumes: ["../../:/workspace:ro", "../../infra/load:/scripts:ro"]
     command: ["k6", "run", "/scripts/daily-summary-50rps.js"]
-    depends_on: [summary]
+    depends_on: { summary: { condition: service_healthy } }

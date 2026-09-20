@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"LedgerEntryEvent.v1","type":"object","required":["eventId","name","version","entry"],"properties":{"eventId":{"type":"string","format":"uuid"},"name":{"enum":["LedgerEntryCreated.v1","LedgerEntryUpdated.v1","LedgerEntryDeleted.v1"]},"version":{"type":"integer","minimum":1},"entry":{"type":"object"}}}
