@@ -42,8 +42,8 @@ public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
             {
                 var state = await context.RequestServices.GetRequiredService<ICurrentKeycloakAuthorization>()
                     .ConfirmAsync(context.User, context.RequestAborted);
-                if (!state.Enabled || !HasBusinessRole(state.Roles) ||
-                    (IsMutation(context.Request) && !HasWriteRole(state.Roles)))
+                if (!state.Enabled || !KeycloakRolePolicy.HasBusinessAccess(state.Roles) ||
+                    (IsMutation(context.Request) && !KeycloakRolePolicy.CanWrite(state.Roles)))
                 {
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return;
@@ -59,12 +59,6 @@ public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
             }
         });
     }
-
-    private static bool HasBusinessRole(IReadOnlySet<string> roles) =>
-        roles.Count(role => role is "admin" or "operator") == 1;
-
-    private static bool HasWriteRole(IReadOnlySet<string> roles) =>
-        roles.Contains("admin") || roles.Contains("operator");
 
     private static bool IsMutation(HttpRequest request) => request.Method is "POST" or "PUT" or "PATCH" or "DELETE";
 }

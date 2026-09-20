@@ -21,14 +21,16 @@ public class CurrentAuthorizationContractTests
             Assert.Contains("Status503ServiceUnavailable", source);
             Assert.Contains("!state.Enabled", source);
             Assert.Contains("Status403Forbidden", source);
-            Assert.Contains("role is \"admin\" or \"operator\"", source);
-            Assert.DoesNotContain("role is \"admin\" or \"operator\" or \"auditor\"", source);
         }
 
         var sharedClient = File.ReadAllText(Path.Combine(Root(), "backend", "BuildingBlocks", "Identity",
             "KeycloakStateClient.cs"));
         Assert.Contains("/admin/realms/", sharedClient);
         Assert.Contains("role-mappings/realm", sharedClient);
+        var rolePolicy = File.ReadAllText(Path.Combine(Root(), "backend", "BuildingBlocks", "Identity",
+            "KeycloakRolePolicy.cs"));
+        Assert.Contains("role is \"admin\" or \"operator\"", rolePolicy);
+        Assert.DoesNotContain("role is \"admin\" or \"operator\" or \"auditor\"", rolePolicy);
     }
 
     static string Root() =>

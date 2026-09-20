@@ -41,7 +41,7 @@ public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
             {
                 var state = await context.RequestServices.GetRequiredService<ICurrentKeycloakAuthorization>()
                     .ConfirmAsync(context.User, context.RequestAborted);
-                if (!state.Enabled || state.Roles.Count(role => role is "admin" or "operator") != 1)
+                if (!state.Enabled || !KeycloakRolePolicy.HasBusinessAccess(state.Roles))
                 {
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return;
