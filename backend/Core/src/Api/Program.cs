@@ -156,12 +156,6 @@ var createEntry = app.MapPost("/ledger/entries",
             "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
         return Results.Created($"/ledger/entries/{entry.Id}", entry);
     });
-var listEntries = app.MapGet("/ledger/entries", async (DateOnly? date, CoreDbContext db, CancellationToken token) =>
-{
-    var query = db.LedgerEntries.Where(x => !x.Deleted);
-    if (date.HasValue) query = query.Where(x => x.BusinessDate == date.Value);
-    return Results.Ok(await query.OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token));
-});
 var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
     async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db,
         LedgerMutationFactory mutations, CancellationToken token) =>
@@ -239,7 +233,6 @@ var updateUser = app.MapPut("/identity/users/{id}",
 if (keycloakEnabled)
 {
     createEntry.RequireAuthorization();
-    listEntries.RequireAuthorization();
     updateEntry.RequireAuthorization();
     deleteEntry.RequireAuthorization();
     users.RequireAuthorization();
