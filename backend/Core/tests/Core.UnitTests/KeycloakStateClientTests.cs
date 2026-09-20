@@ -68,6 +68,30 @@ public sealed class KeycloakStateClientTests
         Assert.Empty(handler.Requests);
     }
 
+    [Fact]
+    public async Task EscapesSubjectWhenBuildingUserRequestUrl()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/token", StringComparison.Ordinal))
+                return JsonResponse("{\"access_token\":\"admin-token\"}");
+
+            if (request.RequestUri.AbsolutePath.Contains("/role-mappings/realm", StringComparison.Ordinal))
+                return JsonResponse("[]");
+
+            return JsonResponse("{\"enabled\":true}");
+        });
+        var sut = CreateSut(CreateClient(handler));
+        var subject = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("sub", "user/1")],
+            "test"));
+
+        await sut.GetAsync(subject, CancellationToken.None);
+
+        Assert.Contains("/users/user%2F1", handler.Requests[1].RequestUri!.AbsolutePath,
+            StringComparison.Ordinal);
+    }
+
     private static KeycloakStateClient CreateSut(HttpClient client)
     {
         var clients = new StubHttpClientFactory(client);
