@@ -35,6 +35,9 @@ public sealed class RabbitOutboxRelay(
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        if ((await db.Database.GetPendingMigrationsAsync(token)).Any())
+            return;
+
         var pending = (await db.OutboxEvents.Where(x => x.PublishedAt == null).ToListAsync(token))
             .OrderBy(x => x.OccurredAt).Take(50).ToList();
         if (pending.Count == 0) return;
