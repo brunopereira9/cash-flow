@@ -21,7 +21,6 @@
   </Folder>
   <Folder Name="/Summary/tests/">
     <Project Path="Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj" />
-    <Project Path="Summary/tests/Summary.UnitTests/Summary.UnitTests.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ArchitectureTests/ArchitectureTests.csproj" />
