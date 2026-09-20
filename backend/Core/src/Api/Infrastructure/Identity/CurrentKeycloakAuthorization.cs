@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
+using CashFlow.BuildingBlocks.Identity;
 using Microsoft.AspNetCore.Authentication;
 
 namespace Core.Api.Infrastructure.Identity;
@@ -19,7 +20,7 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
         timeoutSource.CancelAfter(timeout);
         var client = clients.CreateClient("keycloak-current-state");
         var token = await AdminTokenAsync(client, authority, timeoutSource.Token);
-        var (baseUri, realm) = Realm(authority);
+        var (baseUri, realm) = KeycloakRealm.Parse(authority);
         using var userRequest = new HttpRequestMessage(HttpMethod.Get,
             $"{baseUri}/admin/realms/{realm}/users/{Uri.EscapeDataString(subject)}");
         userRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -42,7 +43,7 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
 
     private async Task<string> AdminTokenAsync(HttpClient client, string authority, CancellationToken token)
     {
-        var (baseUri, realm) = Realm(authority);
+        var (baseUri, realm) = KeycloakRealm.Parse(authority);
         var clientId = configuration["Keycloak:AdminClientId"] ?? "cashflow-api";
         var clientSecret = configuration["Keycloak:AdminClientSecret"] ??
                            throw new InvalidOperationException("Keycloak admin client secret is required.");
@@ -60,15 +61,6 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
         return document.RootElement.GetProperty("access_token").GetString()!;
     }
 
-    private static (string BaseUri, string Realm) Realm(string authority)
-    {
-        var uri = new Uri(authority.TrimEnd('/'));
-        var marker = "/realms/";
-        var index = uri.AbsolutePath.IndexOf(marker, StringComparison.Ordinal);
-        if (index < 0) throw new InvalidOperationException("Keycloak authority must contain /realms/{realm}.");
-        return ($"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath[..index]}",
-            uri.AbsolutePath[(index + marker.Length)..]);
-    }
 }
 
 public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions

@@ -22,4 +22,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\..\BuildingBlocks\Identity\**\*.cs" Link="BuildingBlocks\Identity\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

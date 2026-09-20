@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
+using CashFlow.BuildingBlocks.Identity;
 using Microsoft.AspNetCore.Authentication;
 
 namespace Summary.Api.Infrastructure.Identity;
@@ -18,7 +19,7 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
         timeout.CancelAfter(TimeSpan.FromSeconds(configuration.GetValue("Keycloak:CurrentStateTimeoutSeconds", 2)));
         var client = clients.CreateClient("keycloak-current-state");
         var adminToken = await AdminTokenAsync(client, authority, timeout.Token);
-        var (baseUri, realm) = Realm(authority);
+        var (baseUri, realm) = KeycloakRealm.Parse(authority);
         var headers = new AuthenticationHeaderValue("Bearer", adminToken);
         using var userRequest = new HttpRequestMessage(HttpMethod.Get,
             $"{baseUri}/admin/realms/{realm}/users/{Uri.EscapeDataString(subject)}");
@@ -39,7 +40,7 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
 
     private async Task<string> AdminTokenAsync(HttpClient client, string authority, CancellationToken token)
     {
-        var (baseUri, realm) = Realm(authority);
+        var (baseUri, realm) = KeycloakRealm.Parse(authority);
         using var request =
             new HttpRequestMessage(HttpMethod.Post, $"{baseUri}/realms/{realm}/protocol/openid-connect/token")
             {
@@ -57,15 +58,6 @@ public sealed class CurrentKeycloakAuthorization(IHttpClientFactory clients, ICo
         return body.RootElement.GetProperty("access_token").GetString()!;
     }
 
-    private static (string BaseUri, string Realm) Realm(string authority)
-    {
-        var uri = new Uri(authority.TrimEnd('/'));
-        const string marker = "/realms/";
-        var index = uri.AbsolutePath.IndexOf(marker, StringComparison.Ordinal);
-        if (index < 0) throw new InvalidOperationException("Keycloak authority must contain /realms/{realm}.");
-        return ($"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath[..index]}",
-            uri.AbsolutePath[(index + marker.Length)..]);
-    }
 }
 
 public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
