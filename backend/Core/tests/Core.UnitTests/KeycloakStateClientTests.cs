@@ -1,6 +1,5 @@
 using System.Net;
 using System.Security.Claims;
-using System.Text.Json;
 using CashFlow.BuildingBlocks.Identity;
 using Microsoft.Extensions.Configuration;
 
