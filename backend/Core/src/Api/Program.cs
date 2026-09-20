@@ -177,12 +177,6 @@ static async Task<bool> IsAdminAsync(HttpContext http, ICurrentKeycloakAuthoriza
     return state.Enabled && state.Roles.Contains("admin");
 }
 
-static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ??
-                                            context.User.FindFirst("sub")?.Value ?? "demo-operator";
-
-static string Correlation(HttpContext context) =>
-    context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
-
 namespace Core.Api
 {
     public partial class Program;
