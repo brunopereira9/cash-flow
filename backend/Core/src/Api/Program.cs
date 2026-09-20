@@ -123,59 +123,11 @@ app.Use(async (ctx, next) =>
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
 app.MapControllers();
-var users = app.MapGet("/identity/users",
-    async (HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin,
-        CancellationToken token) =>
-    {
-        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-        return Results.Ok(await admin.ListUsersAsync(token));
-    });
-var createUser = app.MapPost("/identity/users",
-    async (CreateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization,
-        IKeycloakAdminClient admin, CancellationToken token) =>
-    {
-        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-        if (string.IsNullOrWhiteSpace(request.Username) ||
-            !new[] { "admin", "operator", "auditor" }.Contains(request.Role, StringComparer.Ordinal))
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-                { ["user"] = ["username and a supported role are required"] });
-        var user = await admin.CreateUserAsync(request, token);
-        return user is null
-            ? Results.Conflict(new { code = "user_exists" })
-            : Results.Created($"/identity/users/{user.Id}", user);
-    });
-var updateUser = app.MapPut("/identity/users/{id}",
-    async (string id, UpdateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization,
-        IKeycloakAdminClient admin, CancellationToken token) =>
-    {
-        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-        if (request.Role is not ("admin" or "operator" or "auditor"))
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["role"] = ["unsupported role"] });
-        try
-        {
-            return await admin.UpdateUserAsync(id, request, token) ? Results.NoContent() : Results.NotFound();
-        }
-        catch (LastActiveAdminException)
-        {
-            return Results.Conflict(new { code = "last_active_admin" });
-        }
-    });
 if (keycloakEnabled)
 {
-    users.RequireAuthorization();
-    createUser.RequireAuthorization();
-    updateUser.RequireAuthorization();
 }
 
 app.Run();
-
-static async Task<bool> IsAdminAsync(HttpContext http, ICurrentKeycloakAuthorization authorization,
-    CancellationToken token)
-{
-    if (http.User.Identity?.IsAuthenticated != true) return false;
-    var state = await authorization.ConfirmAsync(http.User, token);
-    return state.Enabled && state.Roles.Contains("admin");
-}
 
 namespace Core.Api
 {
