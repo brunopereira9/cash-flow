@@ -2,7 +2,9 @@ namespace Summary.Api.Domain.Entities;
 
 public sealed class DailySummary
 {
-    private DailySummary() { }
+    private DailySummary()
+    {
+    }
 
     public DateOnly Date { get; private set; }
     public decimal Credits { get; private set; }

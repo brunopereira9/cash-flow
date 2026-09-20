@@ -40,23 +40,57 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<CoreSwaggerExamplesOperationFilter>();
 });
 var samplingRatio = Math.Clamp(builder.Configuration.GetValue("Telemetry:SamplingRatio", 1.0), 0.0, 1.0);
-builder.Logging.AddOpenTelemetry(logging => { logging.IncludeFormattedMessage = true; logging.IncludeScopes = true; logging.AddOtlpExporter(); });
+builder.Logging.AddOpenTelemetry(logging =>
+{
+    logging.IncludeFormattedMessage = true;
+    logging.IncludeScopes = true;
+    logging.AddOtlpExporter();
+});
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(builder.Configuration["OTEL_SERVICE_NAME"] ?? "cash-flow-core-api", serviceVersion: builder.Configuration["OTEL_SERVICE_VERSION"] ?? "1.0.0").AddAttributes(new Dictionary<string, object>
-    {
-        ["deployment.environment"] = builder.Configuration["OTEL_ENVIRONMENT"] ?? builder.Environment.EnvironmentName,
-        ["service.namespace"] = "cashflow",
-        ["service.instance.id"] = Environment.MachineName
-    }))
-    .WithTracing(tracing => tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(samplingRatio))).AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddEntityFrameworkCoreInstrumentation().AddSource("CashFlow.Core.Messaging").AddOtlpExporter())
-    .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation().AddMeter("CashFlow.Core").AddOtlpExporter());
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o => { o.MapInboundClaims = false; o.Authority = builder.Configuration["Keycloak:Authority"]; o.Audience = builder.Configuration["Keycloak:Audience"] ?? "cashflow"; o.RequireHttpsMetadata = false; o.TokenValidationParameters.ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"]; var testKey = builder.Configuration["Keycloak:ValidationSigningKey"]; if (!string.IsNullOrWhiteSpace(testKey)) o.TokenValidationParameters = new TokenValidationParameters { ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(testKey)), ValidateIssuer = true, ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"], ValidateAudience = true, ValidAudience = builder.Configuration["Keycloak:Audience"] ?? "cashflow", ValidateLifetime = true, ClockSkew = TimeSpan.Zero }; });
+    .ConfigureResource(resource => resource
+        .AddService(builder.Configuration["OTEL_SERVICE_NAME"] ?? "cash-flow-core-api",
+            serviceVersion: builder.Configuration["OTEL_SERVICE_VERSION"] ?? "1.0.0").AddAttributes(
+            new Dictionary<string, object>
+            {
+                ["deployment.environment"] =
+                    builder.Configuration["OTEL_ENVIRONMENT"] ?? builder.Environment.EnvironmentName,
+                ["service.namespace"] = "cashflow",
+                ["service.instance.id"] = Environment.MachineName
+            }))
+    .WithTracing(tracing => tracing.SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(samplingRatio)))
+        .AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddEntityFrameworkCoreInstrumentation()
+        .AddSource("CashFlow.Core.Messaging").AddOtlpExporter())
+    .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation().AddMeter("CashFlow.Core")
+        .AddOtlpExporter());
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
+{
+    o.MapInboundClaims = false;
+    o.Authority = builder.Configuration["Keycloak:Authority"];
+    o.Audience = builder.Configuration["Keycloak:Audience"] ?? "cashflow";
+    o.RequireHttpsMetadata = false;
+    o.TokenValidationParameters.ValidIssuer =
+        builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"];
+    var testKey = builder.Configuration["Keycloak:ValidationSigningKey"];
+    if (!string.IsNullOrWhiteSpace(testKey))
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(testKey)), ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Keycloak:Issuer"] ?? builder.Configuration["Keycloak:Authority"],
+            ValidateAudience = true, ValidAudience = builder.Configuration["Keycloak:Audience"] ?? "cashflow",
+            ValidateLifetime = true, ClockSkew = TimeSpan.Zero
+        };
+});
 builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("keycloak-current-state");
 builder.Services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
 builder.Services.AddScoped<IKeycloakAdminClient, KeycloakAdminClient>();
-var connection = builder.Configuration.GetConnectionString("Core") ?? "Host=postgres;Database=core_db;Username=cashflow;Password=local";
-if (builder.Configuration["Database:Provider"] == "Sqlite") builder.Services.AddDbContext<CoreDbContext>(o => o.UseSqlite(connection).ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))); else builder.Services.AddDbContext<CoreDbContext>(o => o.UseNpgsql(connection));
+var connection = builder.Configuration.GetConnectionString("Core") ??
+                 "Host=postgres;Database=core_db;Username=cashflow;Password=local";
+if (builder.Configuration["Database:Provider"] == "Sqlite")
+    builder.Services.AddDbContext<CoreDbContext>(o => o.UseSqlite(connection).ConfigureWarnings(w =>
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+else builder.Services.AddDbContext<CoreDbContext>(o => o.UseNpgsql(connection));
 builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck<CoreDbContext>>("database");
 builder.Services.AddHostedService<RabbitOutboxRelay>();
 var app = builder.Build();
@@ -67,37 +101,96 @@ if (args.Any(argument => string.Equals(argument, "--migrate", StringComparison.O
     await app.Services.GetRequiredService<CoreDbContext>().Database.MigrateAsync();
     return;
 }
+
 var keycloakEnabled = builder.Configuration.GetValue("Keycloak:Enabled", false);
-app.UseCors(); if (keycloakEnabled) { app.UseAuthentication(); app.UseAuthorization(); app.UseCurrentKeycloakAuthorization(builder.Configuration); }
-app.Use(async (ctx, next) => { ctx.Response.Headers["X-Correlation-Id"] = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N"); await next(); });
+app.UseCors();
+if (keycloakEnabled)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseCurrentKeycloakAuthorization(builder.Configuration);
+}
+
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.Headers["X-Correlation-Id"] =
+        ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+    await next();
+});
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok", service = "core" }));
 app.MapHealthChecks("/readyz");
-var createEntry = app.MapPost("/ledger/entries", async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Core.Api.Program> logger, CancellationToken token) =>
-{
-    var errors = EntryValidation.Validate(request); var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault(); if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"]; if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
-    var actor = Actor(http); var date = request.BusinessDate ?? Today(); var intent = $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
-    var old = await db.CreationAttempts.Include(x => x.Entry).SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token); if (old is not null) return old.Intent == intent ? Results.Ok(old.Entry) : Results.Conflict(new { code = "idempotency_conflict" });
-    var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1, false);
-    await using var transaction = await db.Database.BeginTransactionAsync(token); db.LedgerEntries.Add(entry); db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry }); AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); logger.LogInformation("Business event {BusinessEvent} published with {EntryId}, {Amount}, {EntryType}, {ActorId}", "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
-    return Results.Created($"/ledger/entries/{entry.Id}", entry);
-});
+var createEntry = app.MapPost("/ledger/entries",
+    async (CreateEntryRequest request, HttpContext http, CoreDbContext db, ILogger<Core.Api.Program> logger,
+        CancellationToken token) =>
+    {
+        var errors = EntryValidation.Validate(request);
+        var key = http.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(key)) errors["Idempotency-Key"] = ["required"];
+        if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
+        var actor = Actor(http);
+        var date = request.BusinessDate ?? Today();
+        var intent =
+            $"{request.Amount.ToString(CultureInfo.InvariantCulture)}|{request.Type}|{request.Description}|{date:yyyy-MM-dd}";
+        var old = await db.CreationAttempts.Include(x => x.Entry)
+            .SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token);
+        if (old is not null)
+            return old.Intent == intent
+                ? Results.Ok(old.Entry)
+                : Results.Conflict(new { code = "idempotency_conflict" });
+        var entry = new LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1,
+            false);
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        db.LedgerEntries.Add(entry);
+        db.CreationAttempts.Add(new CreationAttempt { ActorId = actor, Key = key!, Intent = intent, Entry = entry });
+        AddMutation(db, entry, "created", actor, Correlation(http), "LedgerEntryCreated.v1");
+        await db.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+        logger.LogInformation(
+            "Business event {BusinessEvent} published with {EntryId}, {Amount}, {EntryType}, {ActorId}",
+            "ledger.entry.created", entry.Id, entry.Amount, entry.Type, actor);
+        return Results.Created($"/ledger/entries/{entry.Id}", entry);
+    });
 var listEntries = app.MapGet("/ledger/entries", async (DateOnly? date, CoreDbContext db, CancellationToken token) =>
 {
     var query = db.LedgerEntries.Where(x => !x.Deleted);
     if (date.HasValue) query = query.Where(x => x.BusinessDate == date.Value);
     return Results.Ok(await query.OrderBy(x => x.BusinessDate).ThenBy(x => x.Id).ToListAsync(token));
 });
-var updateEntry = app.MapPut("/ledger/entries/{id:guid}", async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
-{
-    var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token); if (current is null || current.Deleted) return Results.NotFound(); if (request.Version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version }); var errors = EntryValidation.Validate(request); if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
-    current.Amount = request.Amount; current.Type = request.Type!; current.Description = request.Description!; current.BusinessDate = request.BusinessDate ?? current.BusinessDate; current.Version++;
-    await using var transaction = await db.Database.BeginTransactionAsync(token); AddMutation(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); return Results.Ok(current);
-});
-var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}", async (Guid id, int version, HttpContext http, CoreDbContext db, CancellationToken token) =>
-{
-    var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token); if (current is null || current.Deleted) return Results.NotFound(); if (version != current.Version) return Results.Conflict(new { code = "stale_version", currentVersion = current.Version }); current.Deleted = true; current.Version++;
-    await using var transaction = await db.Database.BeginTransactionAsync(token); AddMutation(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1"); await db.SaveChangesAsync(token); await transaction.CommitAsync(token); return Results.NoContent();
-});
+var updateEntry = app.MapPut("/ledger/entries/{id:guid}",
+    async (Guid id, UpdateEntryRequest request, HttpContext http, CoreDbContext db, CancellationToken token) =>
+    {
+        var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
+        if (current is null || current.Deleted) return Results.NotFound();
+        if (request.Version != current.Version)
+            return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
+        var errors = EntryValidation.Validate(request);
+        if (errors.Count > 0) return Results.ValidationProblem(errors, statusCode: 422);
+        current.Amount = request.Amount;
+        current.Type = request.Type!;
+        current.Description = request.Description!;
+        current.BusinessDate = request.BusinessDate ?? current.BusinessDate;
+        current.Version++;
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        AddMutation(db, current, "updated", Actor(http), Correlation(http), "LedgerEntryUpdated.v1");
+        await db.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+        return Results.Ok(current);
+    });
+var deleteEntry = app.MapDelete("/ledger/entries/{id:guid}",
+    async (Guid id, int version, HttpContext http, CoreDbContext db, CancellationToken token) =>
+    {
+        var current = await db.LedgerEntries.SingleOrDefaultAsync(x => x.Id == id, token);
+        if (current is null || current.Deleted) return Results.NotFound();
+        if (version != current.Version)
+            return Results.Conflict(new { code = "stale_version", currentVersion = current.Version });
+        current.Deleted = true;
+        current.Version++;
+        await using var transaction = await db.Database.BeginTransactionAsync(token);
+        AddMutation(db, current, "deleted", Actor(http), Correlation(http), "LedgerEntryDeleted.v1");
+        await db.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+        return Results.NoContent();
+    });
 var audit = app.MapGet("/audit", async (HttpRequest request, CoreDbContext db, CancellationToken token) =>
 {
     var actor = request.Query["actor"].FirstOrDefault();
@@ -114,49 +207,111 @@ var audit = app.MapGet("/audit", async (HttpRequest request, CoreDbContext db, C
     var records = await query.ToListAsync(token);
     return Results.Ok(records.OrderByDescending(x => x.At));
 });
-var users = app.MapGet("/identity/users", async (HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin, CancellationToken token) =>
-{
-    if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-    return Results.Ok(await admin.ListUsersAsync(token));
-});
-var createUser = app.MapPost("/identity/users", async (CreateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin, CancellationToken token) =>
-{
-    if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-    if (string.IsNullOrWhiteSpace(request.Username) || !new[] { "admin", "operator", "auditor" }.Contains(request.Role, StringComparer.Ordinal)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["user"] = ["username and a supported role are required"] });
-    var user = await admin.CreateUserAsync(request, token);
-    return user is null ? Results.Conflict(new { code = "user_exists" }) : Results.Created($"/identity/users/{user.Id}", user);
-});
-var updateUser = app.MapPut("/identity/users/{id}", async (string id, UpdateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin, CancellationToken token) =>
-{
-    if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
-    if (request.Role is not ("admin" or "operator" or "auditor")) return Results.ValidationProblem(new Dictionary<string, string[]> { ["role"] = ["unsupported role"] });
-    try
+var users = app.MapGet("/identity/users",
+    async (HttpContext http, ICurrentKeycloakAuthorization authorization, IKeycloakAdminClient admin,
+        CancellationToken token) =>
     {
-        return await admin.UpdateUserAsync(id, request, token) ? Results.NoContent() : Results.NotFound();
-    }
-    catch (LastActiveAdminException)
+        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
+        return Results.Ok(await admin.ListUsersAsync(token));
+    });
+var createUser = app.MapPost("/identity/users",
+    async (CreateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization,
+        IKeycloakAdminClient admin, CancellationToken token) =>
     {
-        return Results.Conflict(new { code = "last_active_admin" });
-    }
-});
-if (keycloakEnabled) { createEntry.RequireAuthorization(); listEntries.RequireAuthorization(); updateEntry.RequireAuthorization(); deleteEntry.RequireAuthorization(); audit.RequireAuthorization(); users.RequireAuthorization(); createUser.RequireAuthorization(); updateUser.RequireAuthorization(); }
+        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
+        if (string.IsNullOrWhiteSpace(request.Username) ||
+            !new[] { "admin", "operator", "auditor" }.Contains(request.Role, StringComparer.Ordinal))
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+                { ["user"] = ["username and a supported role are required"] });
+        var user = await admin.CreateUserAsync(request, token);
+        return user is null
+            ? Results.Conflict(new { code = "user_exists" })
+            : Results.Created($"/identity/users/{user.Id}", user);
+    });
+var updateUser = app.MapPut("/identity/users/{id}",
+    async (string id, UpdateManagedUserRequest request, HttpContext http, ICurrentKeycloakAuthorization authorization,
+        IKeycloakAdminClient admin, CancellationToken token) =>
+    {
+        if (!await IsAdminAsync(http, authorization, token)) return Results.Forbid();
+        if (request.Role is not ("admin" or "operator" or "auditor"))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["role"] = ["unsupported role"] });
+        try
+        {
+            return await admin.UpdateUserAsync(id, request, token) ? Results.NoContent() : Results.NotFound();
+        }
+        catch (LastActiveAdminException)
+        {
+            return Results.Conflict(new { code = "last_active_admin" });
+        }
+    });
+if (keycloakEnabled)
+{
+    createEntry.RequireAuthorization();
+    listEntries.RequireAuthorization();
+    updateEntry.RequireAuthorization();
+    deleteEntry.RequireAuthorization();
+    audit.RequireAuthorization();
+    users.RequireAuthorization();
+    createUser.RequireAuthorization();
+    updateUser.RequireAuthorization();
+}
+
 app.Run();
-static async Task<bool> IsAdminAsync(HttpContext http, ICurrentKeycloakAuthorization authorization, CancellationToken token)
+
+static async Task<bool> IsAdminAsync(HttpContext http, ICurrentKeycloakAuthorization authorization,
+    CancellationToken token)
 {
     if (http.User.Identity?.IsAuthenticated != true) return false;
     var state = await authorization.ConfirmAsync(http.User, token);
     return state.Enabled && state.Roles.Contains("admin");
 }
-static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, string actor, string correlation, string name)
-{ db.AuditRecords.Add(new AuditRecord { EntryId = entry.Id, Action = action, ActorId = actor, CorrelationId = correlation }); var eventId = Guid.NewGuid(); var payload = JsonSerializer.Serialize(new LedgerEventEnvelope(eventId, name, entry.Version, new(entry.Id, entry.Amount, entry.Type, entry.Description, entry.BusinessDate, entry.Version, entry.Deleted))); db.OutboxEvents.Add(new OutboxEvent { EventId = eventId, Name = name, Version = entry.Version, Payload = payload }); }
-static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ?? context.User.FindFirst("sub")?.Value ?? "demo-operator";
-static string Correlation(HttpContext context) => context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
-static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
+
+static void AddMutation(CoreDbContext db, LedgerEntry entry, string action, string actor, string correlation,
+    string name)
+{
+    db.AuditRecords.Add(new AuditRecord
+        { EntryId = entry.Id, Action = action, ActorId = actor, CorrelationId = correlation });
+    var eventId = Guid.NewGuid();
+    var payload = JsonSerializer.Serialize(new LedgerEventEnvelope(eventId, name, entry.Version,
+        new(entry.Id, entry.Amount, entry.Type, entry.Description, entry.BusinessDate, entry.Version, entry.Deleted)));
+    db.OutboxEvents.Add(new OutboxEvent { EventId = eventId, Name = name, Version = entry.Version, Payload = payload });
+}
+
+static string Actor(HttpContext context) => context.Request.Headers["X-Actor-Id"].FirstOrDefault() ??
+                                            context.User.FindFirst("sub")?.Value ?? "demo-operator";
+
+static string Correlation(HttpContext context) =>
+    context.Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+
+static DateOnly Today() =>
+    DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
 
 namespace Core.Api
 {
     public partial class Program;
+
     public record CreateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate);
-    public record UpdateEntryRequest(decimal Amount, string? Type, string? Description, DateOnly? BusinessDate, int Version);
-    public static class EntryValidation { public static Dictionary<string, string[]> Validate(dynamic request) { var errors = new Dictionary<string, string[]>(); if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount) errors["Amount"] = ["must be positive with at most two decimal places"]; if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"]; if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"]; if (request.BusinessDate is DateOnly date && date > DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"))) errors["BusinessDate"] = ["cannot be in the future"]; return errors; } }
+
+    public record UpdateEntryRequest(
+        decimal Amount,
+        string? Type,
+        string? Description,
+        DateOnly? BusinessDate,
+        int Version);
+
+    public static class EntryValidation
+    {
+        public static Dictionary<string, string[]> Validate(dynamic request)
+        {
+            var errors = new Dictionary<string, string[]>();
+            if (request.Amount <= 0 || decimal.Round(request.Amount, 2) != request.Amount)
+                errors["Amount"] = ["must be positive with at most two decimal places"];
+            if (string.IsNullOrWhiteSpace(request.Type)) errors["Type"] = ["required"];
+            if (string.IsNullOrWhiteSpace(request.Description)) errors["Description"] = ["required"];
+            if (request.BusinessDate is DateOnly date && date >
+                DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo")))
+                errors["BusinessDate"] = ["cannot be in the future"];
+            return errors;
+        }
+    }
 }

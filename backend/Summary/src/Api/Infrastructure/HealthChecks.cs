@@ -5,7 +5,8 @@ namespace Summary.Api.Infrastructure;
 
 public sealed class SummaryDatabaseReadinessCheck(IServiceScopeFactory scopes) : IHealthCheck
 {
-    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -26,9 +27,19 @@ public static class CashFlowSummaryTelemetry
 {
     public static readonly System.Diagnostics.ActivitySource Messaging = new("CashFlow.Summary.Messaging");
     private static readonly System.Diagnostics.Metrics.Meter Meter = new("CashFlow.Summary", "1.0.0");
-    public static readonly System.Diagnostics.Metrics.Counter<long> InboxDuplicates = Meter.CreateCounter<long>("cashflow.inbox.duplicates");
-    public static readonly System.Diagnostics.Metrics.Counter<long> ProjectionApplied = Meter.CreateCounter<long>("cashflow.projection.applied");
-    public static readonly System.Diagnostics.Metrics.Counter<long> ProjectionFailures = Meter.CreateCounter<long>("cashflow.projection.failures");
-    public static readonly System.Diagnostics.Metrics.Counter<long> KeycloakChecks = Meter.CreateCounter<long>("cashflow.keycloak.authorization_checks");
-    public static readonly System.Diagnostics.Metrics.Counter<long> KeycloakFailures = Meter.CreateCounter<long>("cashflow.keycloak.authorization_failures");
+
+    public static readonly System.Diagnostics.Metrics.Counter<long> InboxDuplicates =
+        Meter.CreateCounter<long>("cashflow.inbox.duplicates");
+
+    public static readonly System.Diagnostics.Metrics.Counter<long> ProjectionApplied =
+        Meter.CreateCounter<long>("cashflow.projection.applied");
+
+    public static readonly System.Diagnostics.Metrics.Counter<long> ProjectionFailures =
+        Meter.CreateCounter<long>("cashflow.projection.failures");
+
+    public static readonly System.Diagnostics.Metrics.Counter<long> KeycloakChecks =
+        Meter.CreateCounter<long>("cashflow.keycloak.authorization_checks");
+
+    public static readonly System.Diagnostics.Metrics.Counter<long> KeycloakFailures =
+        Meter.CreateCounter<long>("cashflow.keycloak.authorization_failures");
 }

@@ -2,7 +2,9 @@ namespace Summary.Api.Domain.Entities;
 
 public sealed class InboxEvent
 {
-    private InboxEvent() { }
+    private InboxEvent()
+    {
+    }
 
     private InboxEvent(Guid eventId, int version) => (EventId, Version) = (eventId, version);
 

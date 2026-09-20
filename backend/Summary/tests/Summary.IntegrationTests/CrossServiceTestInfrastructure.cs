@@ -11,7 +11,8 @@ namespace Summary.IntegrationTests;
 
 public sealed class CrossServiceCoreApiFactory(string rabbitUri) : WebApplicationFactory<Program>
 {
-    private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-core-cross-service-{Guid.NewGuid():N}.db");
+    private readonly string database =
+        Path.Combine(Path.GetTempPath(), $"cashflow-core-cross-service-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

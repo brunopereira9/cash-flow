@@ -14,6 +14,7 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
     public bool Available { get; init; } = true;
     public string? RabbitUri { get; init; }
     private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-summary-{Guid.NewGuid():N}.db");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Summary:Available", Available.ToString());
@@ -37,6 +38,7 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
         return await query(scope.ServiceProvider.GetRequiredService<SummaryDbContext>());
     }
 }
+
 public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
 {
     private readonly RabbitMqFixture rabbit;
@@ -49,8 +51,12 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         using var summaryFactory = new SummaryApiFactory { RabbitUri = rabbit.Uri };
         using var coreClient = coreFactory.CreateClient();
         using var summaryClient = summaryFactory.CreateClient();
-        var businessDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
-        using var create = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries") { Content = JsonContent.Create(new { amount = 25m, type = "credit", description = "once", businessDate }) };
+        var businessDate =
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
+        {
+            Content = JsonContent.Create(new { amount = 25m, type = "credit", description = "once", businessDate })
+        };
         create.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString("N"));
         create.Headers.Add("X-Actor-Id", "rabbit-actor");
         var created = await coreClient.SendAsync(create);
@@ -58,7 +64,8 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         var entry = await created.Content.ReadFromJsonAsync<JsonElement>();
         var entryId = entry.GetProperty("id").GetGuid();
 
-        await TestEventually.WaitForAsync(async () => await SummaryHasAmountAsync(summaryClient, businessDate, 25m), TimeSpan.FromSeconds(30));
+        await TestEventually.WaitForAsync(async () => await SummaryHasAmountAsync(summaryClient, businessDate, 25m),
+            TimeSpan.FromSeconds(30));
         var coreState = await coreFactory.ReadDbAsync(async db => new
         {
             Entries = await db.LedgerEntries.CountAsync(x => x.Id == entryId),
@@ -69,18 +76,35 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         Assert.Equal(1, coreState.Audits);
         Assert.True(coreState.Outbox.PublishedAt.HasValue);
 
-        var duplicate = await summaryClient.PostAsJsonAsync("/internal/events", JsonSerializer.Deserialize<JsonElement>(coreState.Outbox.Payload));
+        var duplicate = await summaryClient.PostAsJsonAsync("/internal/events",
+            JsonSerializer.Deserialize<JsonElement>(coreState.Outbox.Payload));
         Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
-        var inboxAfterDuplicate = await summaryFactory.ReadDbAsync(db => db.InboxEvents.CountAsync(x => x.EventId == coreState.Outbox.EventId));
+        var inboxAfterDuplicate =
+            await summaryFactory.ReadDbAsync(db =>
+                db.InboxEvents.CountAsync(x => x.EventId == coreState.Outbox.EventId));
         Assert.Equal(1, inboxAfterDuplicate);
 
-        using var update = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{entryId}") { Content = JsonContent.Create(new { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 }) };
+        using var update = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{entryId}")
+        {
+            Content = JsonContent.Create(new
+                { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 })
+        };
         update.Headers.Add("X-Actor-Id", "rabbit-actor");
         var updated = await coreClient.SendAsync(update);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        await TestEventually.WaitForAsync(async () => await SummaryHasAmountAsync(summaryClient, businessDate, 40m), TimeSpan.FromSeconds(30));
+        await TestEventually.WaitForAsync(async () => await SummaryHasAmountAsync(summaryClient, businessDate, 40m),
+            TimeSpan.FromSeconds(30));
 
-        var obsolete = await summaryClient.PostAsJsonAsync("/internal/events", new { eventId = Guid.NewGuid(), name = "LedgerEntryUpdated.v1", version = 1, entry = new { id = entryId, amount = 99m, type = "credit", description = "obsolete", businessDate, version = 1, deleted = false } });
+        var obsolete = await summaryClient.PostAsJsonAsync("/internal/events",
+            new
+            {
+                eventId = Guid.NewGuid(), name = "LedgerEntryUpdated.v1", version = 1,
+                entry = new
+                {
+                    id = entryId, amount = 99m, type = "credit", description = "obsolete", businessDate, version = 1,
+                    deleted = false
+                }
+            });
         Assert.Equal(HttpStatusCode.OK, obsolete.StatusCode);
         var projected = await summaryFactory.ReadDbAsync(db => db.ProjectedEntries.SingleAsync(x => x.Id == entryId));
         Assert.Equal(2, projected.Version);
@@ -92,6 +116,7 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         var response = await client.GetAsync($"/summary/daily/{date:yyyy-MM-dd}");
         if (response.StatusCode != HttpStatusCode.OK) return false;
         var summary = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return summary.GetProperty("credits").GetDecimal() == amount && summary.GetProperty("freshnessStatus").GetString() == "current";
+        return summary.GetProperty("credits").GetDecimal() == amount &&
+               summary.GetProperty("freshnessStatus").GetString() == "current";
     }
 }

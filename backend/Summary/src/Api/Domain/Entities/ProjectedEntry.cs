@@ -4,7 +4,9 @@ namespace Summary.Api.Domain.Entities;
 
 public sealed class ProjectedEntry
 {
-    private ProjectedEntry() { }
+    private ProjectedEntry()
+    {
+    }
 
     private ProjectedEntry(ProjectedEntryPayload payload) => Apply(payload);
 
@@ -20,7 +22,8 @@ public sealed class ProjectedEntry
 
     public void Apply(ProjectedEntryPayload payload)
     {
-        if (payload.Id != Id && Id != Guid.Empty) throw new InvalidOperationException("Projected entry identity cannot change.");
+        if (payload.Id != Id && Id != Guid.Empty)
+            throw new InvalidOperationException("Projected entry identity cannot change.");
         if (payload.Version <= Version) throw new InvalidOperationException("Projected entry version must advance.");
         Id = payload.Id;
         Amount = payload.Amount;
