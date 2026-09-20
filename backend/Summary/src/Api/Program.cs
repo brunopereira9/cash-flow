@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Summary.Api.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Any;
@@ -82,13 +83,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("keycloak-current-state");
 builder.Services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
-var connection = builder.Configuration.GetConnectionString("Summary") ??
-                 "Host=postgres;Database=summary_db;Username=cashflow;Password=local";
-if (builder.Configuration["Database:Provider"] == "Sqlite")
-    builder.Services.AddDbContext<SummaryDbContext>(o => o.UseSqlite(connection).ConfigureWarnings(w =>
-        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
-else builder.Services.AddDbContext<SummaryDbContext>(o => o.UseNpgsql(connection));
-builder.Services.AddHealthChecks().AddCheck<SummaryDatabaseReadinessCheck>("database");
+builder.Services.AddSummaryPersistence(builder.Configuration);
 builder.Services.AddScoped<ProjectionService>();
 builder.Services.AddHostedService<RabbitSummaryConsumer>();
 var app = builder.Build();

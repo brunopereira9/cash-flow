@@ -5,6 +5,7 @@ using Core.Api.Application.Interfaces;
 using Core.Api.Application.Models;
 using Core.Api.Application.Events;
 using Core.Api.Application.Validation;
+using Core.Api.Configuration;
 using Core.Api.Domain.Entities;
 using Core.Api.Domain.Events;
 using Core.Api.Infrastructure;
@@ -88,13 +89,7 @@ builder.Services.AddHttpClient("keycloak-current-state");
 builder.Services.AddScoped<ICurrentKeycloakAuthorization, CurrentKeycloakAuthorization>();
 builder.Services.AddScoped<IKeycloakAdminClient, KeycloakAdminClient>();
 builder.Services.AddScoped<LedgerMutationFactory>();
-var connection = builder.Configuration.GetConnectionString("Core") ??
-                 "Host=postgres;Database=core_db;Username=cashflow;Password=local";
-if (builder.Configuration["Database:Provider"] == "Sqlite")
-    builder.Services.AddDbContext<CoreDbContext>(o => o.UseSqlite(connection).ConfigureWarnings(w =>
-        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
-else builder.Services.AddDbContext<CoreDbContext>(o => o.UseNpgsql(connection));
-builder.Services.AddHealthChecks().AddCheck<DatabaseReadinessCheck<CoreDbContext>>("database");
+builder.Services.AddCorePersistence(builder.Configuration);
 builder.Services.AddHostedService<RabbitOutboxRelay>();
 var app = builder.Build();
 app.UseSwagger();
