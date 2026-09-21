@@ -29,7 +29,7 @@ services:
     environment:
       ConnectionStrings__Core: Host=postgres;Database=core_db;Username=cashflow;Password=local
       RabbitMq__Enabled: "true"
-      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+      RabbitMq__Uri: amqp://admin:admin@rabbitmq:5672/
       Keycloak__Enabled: "true"
       Keycloak__Authority: http://keycloak:8080/realms/cashflow
       Keycloak__Issuer: http://localhost:18081/realms/cashflow
@@ -62,7 +62,7 @@ services:
     environment:
       ConnectionStrings__Summary: Host=postgres;Database=summary_db;Username=cashflow;Password=local
       RabbitMq__Enabled: "true"
-      RabbitMq__Uri: amqp://guest:guest@rabbitmq:5672/
+      RabbitMq__Uri: amqp://admin:admin@rabbitmq:5672/
       Keycloak__Enabled: "true"
       Keycloak__Authority: http://keycloak:8080/realms/cashflow
       Keycloak__Issuer: http://localhost:18081/realms/cashflow
@@ -97,9 +97,13 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports: ["15672:15672"]
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ../../infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ../../infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
     environment:
       RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: local-rabbitmq-admin
+      RABBITMQ_DEFAULT_PASS: admin
     healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 12 }
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -145,3 +149,6 @@ services:
     volumes: ["../../:/workspace:ro", "../../infra/load:/scripts:ro"]
     command: ["k6", "run", "/scripts/daily-summary-50rps.js"]
     depends_on: { summary: { condition: service_healthy } }
+
+volumes:
+  rabbitmq-data:

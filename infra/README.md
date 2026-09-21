@@ -27,7 +27,7 @@ O runtime das APIs não aplica migrations. Para repetir em um ambiente limpo, ex
 
 Verificar bancos: `docker compose -f infra/compose/compose.yaml exec postgres psql -U cashflow -d postgres -c "\l"`.
 
-O painel do RabbitMQ Management fica disponível em `http://localhost:15672`, usando `admin` / `local-rabbitmq-admin`. Nele é possível acompanhar filas, exchanges, consumidores, mensagens prontas e mensagens não confirmadas. O usuário `admin` é administrador do RabbitMQ; as credenciais são somente para o ambiente local.
+O painel do RabbitMQ Management fica disponível em `http://localhost:15672`, usando `admin` / `admin`. Nele é possível acompanhar filas, exchanges, consumidores, mensagens prontas e mensagens não confirmadas. O usuário `admin` é administrador do RabbitMQ; as credenciais são somente para o ambiente local.
 
 Reset local destrutivo: `docker compose -f infra/compose/compose.yaml down -v`.
 

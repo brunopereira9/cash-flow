@@ -23,7 +23,7 @@ O Compose cria os bancos no PostgreSQL, executa as migrations das APIs e aguarda
 - Core API: <http://localhost:5080>
 - Summary API: <http://localhost:5081>
 - Keycloak: <http://localhost:18081>
-- RabbitMQ Management: <http://localhost:15672> (`admin` / `local-rabbitmq-admin`)
+- RabbitMQ Management: <http://localhost:15672> (`admin` / `admin`)
 
 Usuários de desenvolvimento do Keycloak usam a senha `username123`. Para acessar as funcionalidades protegidas, use o usuário `demo-operator`.
 
