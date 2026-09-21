@@ -2,6 +2,15 @@
 
 Scaffold do monorepo definido no RFC-001: `Core.Api`, `Summary.Api`, frontend React/Vite, contratos de eventos e testes .NET separados por contexto.
 
+## Documentação arquitetural
+
+- [C4 nível 1 — contexto](docs/architecture/c4-context.md)
+- [C4 nível 2 — containers](docs/architecture/c4-containers.md)
+- [C4 nível 3 — componentes do Core](docs/architecture/c4-components-core.md)
+- [Decisões arquiteturais e trade-offs](docs/architecture/decisions.md)
+- [Operação, retry, DLQ e teste de carga](docs/architecture/operations.md)
+
+
 ## Rodar localmente com Docker
 
 ### Pré-requisitos
@@ -31,44 +40,16 @@ Usuários de desenvolvimento do Keycloak usam a senha `username123`. Para acessa
 
 Obtenha um token de acesso no Keycloak usando o fluxo de senha disponível somente no ambiente local:
 
-```powershell
-$tokenResponse = Invoke-RestMethod `
-  -Method Post `
-  -Uri "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
-  -ContentType "application/x-www-form-urlencoded" `
-  -Body @{
-    grant_type = "password"
-    client_id = "cashflow-front"
-    username = "demo-operator"
-    password = "username123"
-  }
 
-$token = $tokenResponse.access_token
-```
-
-Use o token como `Bearer` nas chamadas autenticadas. Por exemplo:
-
-```powershell
-Invoke-RestMethod `
-  -Uri "http://localhost:5080/ledger/entries" `
-  -Headers @{ Authorization = "Bearer $token" }
-
-Invoke-RestMethod `
-  -Uri "http://localhost:5081/summary/daily/2026-09-20" `
-  -Headers @{ Authorization = "Bearer $token" }
-```
-
-O token também pode ser gerado com `curl`:
-
-```powershell
-curl.exe -X POST "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
+```curl
+curl -X POST "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
   -H "Content-Type: application/x-www-form-urlencoded" `
   -d "grant_type=password&client_id=cashflow-front&username=demo-operator&password=username123"
 ```
 
 Para verificar se as APIs estão prontas:
 
-```powershell
+```curl
 curl http://localhost:5080/healthz
 curl http://localhost:5081/healthz
 ```
@@ -104,15 +85,6 @@ docker compose -f infra/compose/compose.yaml down -v
 O ambiente de infraestrutura possui instruções adicionais em [`infra/README.md`](infra/README.md), incluindo observabilidade, banco de dados, autenticação e testes de carga.
 
 ## Comandos disponíveis
-
-## Documentação arquitetural
-
-- [Checklist de conformidade](docs/checklist-conformidade.md)
-- [C4 nível 1 — contexto](docs/architecture/c4-context.md)
-- [C4 nível 2 — containers](docs/architecture/c4-containers.md)
-- [C4 nível 3 — componentes do Core](docs/architecture/c4-components-core.md)
-- [Decisões arquiteturais e trade-offs](docs/architecture/decisions.md)
-- [Operação, retry, DLQ e teste de carga](docs/architecture/operations.md)
 
 ```powershell
 dotnet build backend/CashFlow.slnx
