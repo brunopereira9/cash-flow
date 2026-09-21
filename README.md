@@ -27,6 +27,45 @@ O Compose cria os bancos no PostgreSQL, executa as migrations das APIs e aguarda
 
 Usuários de desenvolvimento do Keycloak usam a senha `username123`. Para acessar as funcionalidades protegidas, use o usuário `demo-operator`.
 
+### Gerar token para usar as APIs
+
+Obtenha um token de acesso no Keycloak usando o fluxo de senha disponível somente no ambiente local:
+
+```powershell
+$tokenResponse = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
+  -ContentType "application/x-www-form-urlencoded" `
+  -Body @{
+    grant_type = "password"
+    client_id = "cashflow-front"
+    username = "demo-operator"
+    password = "username123"
+  }
+
+$token = $tokenResponse.access_token
+```
+
+Use o token como `Bearer` nas chamadas autenticadas. Por exemplo:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:5080/ledger/entries" `
+  -Headers @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod `
+  -Uri "http://localhost:5081/summary/daily/2026-09-20" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+O token também pode ser gerado com `curl`:
+
+```powershell
+curl.exe -X POST "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  -d "grant_type=password&client_id=cashflow-front&username=demo-operator&password=username123"
+```
+
 Para verificar se as APIs estão prontas:
 
 ```powershell
