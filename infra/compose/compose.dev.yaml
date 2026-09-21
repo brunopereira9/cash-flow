@@ -1,8 +1,17 @@
 services:
+  dev-restore:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /workspace/backend
+    command: ["sh", "-c", "dotnet restore Core/src/Api/Core.Api.csproj && dotnet restore Summary/src/Api/Summary.Api.csproj"]
+    volumes:
+      - ../../backend:/workspace/backend
+      - core-nuget:/root/.nuget/packages
+    restart: "no"
+
   core:
     image: mcr.microsoft.com/dotnet/sdk:8.0
     working_dir: /workspace/backend
-    command: ["dotnet", "watch", "--project", "Core/src/Api/Core.Api.csproj", "run", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
+    command: ["dotnet", "watch", "--project", "Core/src/Api/Core.Api.csproj", "run", "--no-restore", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
@@ -15,11 +24,13 @@ services:
       - "5005:5005"
     healthcheck:
       disable: true
+    depends_on:
+      dev-restore: { condition: service_completed_successfully }
 
   summary:
     image: mcr.microsoft.com/dotnet/sdk:8.0
     working_dir: /workspace/backend
-    command: ["dotnet", "watch", "--project", "Summary/src/Api/Summary.Api.csproj", "run", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
+    command: ["dotnet", "watch", "--project", "Summary/src/Api/Summary.Api.csproj", "run", "--no-restore", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
@@ -32,6 +43,8 @@ services:
       - "5006:5006"
     healthcheck:
       disable: true
+    depends_on:
+      dev-restore: { condition: service_completed_successfully }
 
   frontend:
     image: node:22-alpine
@@ -42,8 +55,7 @@ services:
     volumes:
       - ../../front:/workspace/front
       - frontend-node-modules:/workspace/front/node_modules
-    ports:
-      - "5173:5173"
+    ports: !override ["5174:5173"]
     healthcheck:
       disable: true
 
