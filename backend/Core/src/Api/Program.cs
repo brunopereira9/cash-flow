@@ -1,7 +1,5 @@
-using Core.Api;
 using Core.Api.Application.Events;
 using Core.Api.Configuration;
-using Core.Api.Infrastructure;
 using Core.Api.Infrastructure.Identity;
 using Core.Api.Infrastructure.Messaging;
 using Core.Api.Infrastructure.Persistence;

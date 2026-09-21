@@ -1,7 +1,7 @@
 <Solution>
-  <Folder Name="/BuildingBlocks/" />
-  <Project Path="BuildingBlocks/Identity/CashFlow.BuildingBlocks.Identity.csproj" />
-  <Folder Name="/Core/" />
+  <Folder Name="/BuildingBlocks/">
+    <Project Path="BuildingBlocks/Identity/CashFlow.BuildingBlocks.Identity.csproj" />
+  </Folder>
   <Folder Name="/Core/src/">
     <Folder Name="/Core/src/Api/Application/" />
     <Folder Name="/Core/src/Api/Domain/" />
@@ -12,7 +12,6 @@
     <Project Path="Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj" />
     <Project Path="Core/tests/Core.UnitTests/Core.UnitTests.csproj" />
   </Folder>
-  <Folder Name="/Summary/" />
   <Folder Name="/Summary/src/">
     <Folder Name="/Summary/src/Api/Application/" />
     <Folder Name="/Summary/src/Api/Domain/" />
