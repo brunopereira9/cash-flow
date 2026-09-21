@@ -21,7 +21,16 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         var old = await service.FindByIdempotencyAsync(actor, key!, token);
         if (old is not null) return Ok(old);
         var entry = new Domain.Entities.LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1, false);
-        await service.AddAsync(entry, key!, actor, Correlation(), token);
+        try
+        {
+            await service.AddAsync(entry, key!, actor, Correlation(), token);
+        }
+        catch (DbUpdateException)
+        {
+            var concurrent = await service.FindByIdempotencyAsync(actor, key!, token);
+            if (concurrent is not null) return Ok(concurrent);
+            throw;
+        }
         logger.LogInformation("Business event {BusinessEvent} published with {EntryId}", "ledger.entry.created", entry.Id);
         return Created($"/ledger/entries/{entry.Id}", entry);
     }
@@ -74,6 +83,6 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         return NoContent();
     }
 
-    private string Actor() => Request.Headers["X-Actor-Id"].FirstOrDefault() ?? User.FindFirst("sub")?.Value ?? "demo-operator";
+    private string Actor() => User.FindFirst("sub")?.Value ?? "system";
     private string Correlation() => Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
 }

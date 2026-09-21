@@ -19,7 +19,9 @@ public static class EntryValidator
         var errors = new Dictionary<string, string[]>();
         if (amount <= 0 || decimal.Round(amount, 2) != amount)
             errors["Amount"] = ["must be positive with at most two decimal places"];
-        if (string.IsNullOrWhiteSpace(type)) errors["Type"] = ["required"];
+        if (!string.Equals(type, "credit", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(type, "debit", StringComparison.OrdinalIgnoreCase))
+            errors["Type"] = ["must be either credit or debit"];
         if (string.IsNullOrWhiteSpace(description)) errors["Description"] = ["required"];
         if (businessDate is DateOnly date && date > Today()) errors["BusinessDate"] = ["cannot be in the future"];
         return errors;

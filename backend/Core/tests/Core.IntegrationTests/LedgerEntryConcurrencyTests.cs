@@ -72,6 +72,21 @@ public class LedgerEntryConcurrencyTests : IClassFixture<CoreApiFactory>
         Assert.Equal(beforeStale, afterStale);
     }
 
+    [Fact]
+    public async Task ConcurrentCreationWithSameKeyReturnsOneEntry()
+    {
+        var key = Guid.NewGuid().ToString("N");
+        var payload = new { amount = 17m, type = "credit", description = "same-key" };
+        var responses = await Task.WhenAll(
+            PostAsync(payload, key, "concurrent-create"),
+            PostAsync(payload, key, "concurrent-create"));
+
+        Assert.All(responses, response => Assert.Contains(response.StatusCode,
+            new[] { HttpStatusCode.Created, HttpStatusCode.OK }));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, object payload, string correlation)
     {
         using var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(payload) };

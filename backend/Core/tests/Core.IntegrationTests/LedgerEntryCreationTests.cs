@@ -80,6 +80,7 @@ public class LedgerEntryCreationTests : IClassFixture<CoreApiFactory>
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = -1m, type = "credit", description = "bad" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 1.234m, type = "credit", description = "bad" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "", description = "bad" })).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "transfer", description = "bad" })).StatusCode);
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await PostAsync(new { amount = 2m, type = "credit", description = "" })).StatusCode);
         Assert.Equal(
             HttpStatusCode.UnprocessableEntity,
@@ -114,15 +115,15 @@ public class LedgerEntryCreationTests : IClassFixture<CoreApiFactory>
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
-        Assert.Equal(HttpStatusCode.Created, otherActor.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, otherActor.StatusCode);
         var secondBody = await second.Content.ReadFromJsonAsync<JsonElement>();
         var otherActorBody = await otherActor.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(firstBody.GetProperty("id").GetGuid(), secondBody.GetProperty("id").GetGuid());
-        Assert.NotEqual(firstBody.GetProperty("id").GetGuid(), otherActorBody.GetProperty("id").GetGuid());
-        Assert.Equal(before.Entries + 2, after.Entries);
-        Assert.Equal(before.Attempts + 2, after.Attempts);
-        Assert.Equal(before.Audits + 2, after.Audits);
-        Assert.Equal(before.Outbox + 2, after.Outbox);
+        Assert.Equal(firstBody.GetProperty("id").GetGuid(), otherActorBody.GetProperty("id").GetGuid());
+        Assert.Equal(before.Entries + 1, after.Entries);
+        Assert.Equal(before.Attempts + 1, after.Attempts);
+        Assert.Equal(before.Audits + 1, after.Audits);
+        Assert.Equal(before.Outbox + 1, after.Outbox);
     }
 
     private async Task<HttpResponseMessage> PostAsync(object payload, string? key = null, string actor = "creation-actor")
