@@ -1,5 +1,6 @@
 using Core.Api.Application.Models;
 using Core.Api.Application.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Core.Api.Controllers;
@@ -41,7 +42,15 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         current.Description = request.Description!;
         current.BusinessDate = request.BusinessDate ?? current.BusinessDate;
         current.Version++;
-        await service.UpdateAsync(current, Actor(), Correlation(), token);
+        try
+        {
+            await service.UpdateAsync(current, Actor(), Correlation(), token);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { code = "stale_version" });
+        }
+
         return Ok(current);
     }
 
@@ -53,7 +62,15 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         if (version != current.Version) return Conflict(new { code = "stale_version", currentVersion = current.Version });
         current.Deleted = true;
         current.Version++;
-        await service.DeleteAsync(current, Actor(), Correlation(), token);
+        try
+        {
+            await service.DeleteAsync(current, Actor(), Correlation(), token);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { code = "stale_version" });
+        }
+
         return NoContent();
     }
 

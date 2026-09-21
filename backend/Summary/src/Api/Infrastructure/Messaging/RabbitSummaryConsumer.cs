@@ -84,12 +84,24 @@ public sealed class RabbitSummaryConsumer(
             activity?.SetTag("messaging.destination.name", "cashflow.summary");
             activity?.SetTag("messaging.operation.type", "process");
             activity?.SetTag("messaging.message.id", delivery.BasicProperties?.MessageId);
+            ProjectionEvent message;
             try
             {
-                var message =
-                    JsonSerializer.Deserialize<ProjectionEvent>(Encoding.UTF8.GetString(delivery.Body.ToArray()),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
-                    throw new InvalidOperationException("Invalid ledger event");
+                message = JsonSerializer.Deserialize<ProjectionEvent>(
+                              Encoding.UTF8.GetString(delivery.Body.ToArray()),
+                              new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                          ?? throw new InvalidOperationException("Invalid ledger event");
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            {
+                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, exception.Message);
+                logger.LogError(exception, "Invalid ledger event; sending to dead-letter queue");
+                activeChannel.BasicNack(delivery.DeliveryTag, false, false);
+                return;
+            }
+
+            try
+            {
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ProjectionService>().ApplyAsync(message, token);
                 logger.LogInformation("Business event {BusinessEvent} processed with {MessageId}",
