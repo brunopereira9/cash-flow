@@ -87,6 +87,17 @@ public class LedgerEntryConcurrencyTests : IClassFixture<CoreApiFactory>
         Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
     }
 
+    private async Task<HttpResponseMessage> PostAsync(object payload, string key, string actor)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add("Idempotency-Key", key);
+        request.Headers.Add("X-Actor-Id", actor);
+        return await client.SendAsync(request);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, object payload, string correlation)
     {
         using var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(payload) };
