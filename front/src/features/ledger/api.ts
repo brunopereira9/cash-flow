@@ -1,4 +1,5 @@
 import { apiHeaders, apiUrl, jsonOrError } from '../../lib/http'
+import { addBusinessDays, currentBusinessDate } from '../../lib/date'
 import type { LedgerEntry } from './types'
 
 export function listLedgerEntries(accessToken: string, date?: string): Promise<LedgerEntry[]> {
@@ -20,23 +21,20 @@ export function createLedgerEntry(
 
 export async function seedLedgerEntries(accessToken: string, total = 2000, days = 10): Promise<number> {
   const entriesPerDay = total / days
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const startDate = new Date(today)
-  startDate.setDate(startDate.getDate() - (days - 1))
+  const today = currentBusinessDate()
+  const startDate = addBusinessDays(today, -(days - 1))
 
   for (let index = 0; index < total; index += 20) {
     const batch = Array.from({ length: Math.min(20, total - index) }, (_, offset) => {
       const entryIndex = index + offset
-      const businessDate = new Date(startDate)
-      businessDate.setDate(startDate.getDate() + Math.floor(entryIndex / entriesPerDay))
+      const businessDate = addBusinessDays(startDate, Math.floor(entryIndex / entriesPerDay))
       const credit = entryIndex % 2 === 0
 
       return createLedgerEntry(accessToken, {
         amount: credit ? 100 : 50,
         type: credit ? 'credit' : 'debit',
         description: `Carga de teste ${entryIndex + 1}/${total}`,
-        businessDate: businessDate.toISOString().slice(0, 10),
+        businessDate,
       }, `frontend-seed-${crypto.randomUUID()}`)
     })
 

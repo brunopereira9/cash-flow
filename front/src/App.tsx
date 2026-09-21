@@ -7,6 +7,7 @@ import { createLedgerEntry, listLedgerEntries, seedLedgerEntries } from './featu
 import { getDailySummary } from './features/summary/api'
 import { listAuditRecords } from './features/audit/api'
 import { listUsers, updateUser } from './features/users/api'
+import { currentBusinessDate } from './lib/date'
 import type { LedgerEntry } from './features/ledger/types'
 import type { DailySummary } from './features/summary/types'
 import type { AuditRecord } from './features/audit/types'
@@ -26,7 +27,7 @@ function App() {
   const [auth, setAuth] = useState<AuthState>({ kind: 'loading' })
   const [entries, setEntries] = useState<Entry[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [selectedDate, setSelectedDate] = useState(currentBusinessDate)
   const [screenState, setScreenState] = useState<ScreenState>('loading')
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -140,7 +141,7 @@ function App() {
     try {
       const count = await seedLedgerEntries(auth.accessToken)
       setUserMessage(`${count} lançamentos criados nos últimos 10 dias.`)
-      setSelectedDate(new Date().toISOString().slice(0, 10))
+      setSelectedDate(currentBusinessDate())
     } catch (reason: unknown) {
       setScreenState(reason instanceof ApiError && [401, 403].includes(reason.status) ? 'unauthorized' : 'error')
     } finally {
@@ -173,7 +174,7 @@ function App() {
     </section>}
     {view === 'summary' && <><section className="summary-grid" aria-label="Resumo mensal"><article><span>Entradas no mês</span><strong className="positive">{summary ? currency.format(summary.credits) : '—'}</strong><small>Consolidado diário</small></article><article><span>Saídas no mês</span><strong>{summary ? currency.format(summary.debits) : '—'}</strong><small>Consolidado diário</small></article><article><span>Transações</span><strong>{screenState === 'loading' ? '—' : entries.length}</strong><small>{screenState === 'loading' ? 'carregando' : 'no período'}</small></article></section>
     <section className="activity"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Últimos lançamentos</h2></div><label>Data <input aria-label="Filtrar por data" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label></div>{screenState === 'loading' && <p className="state-copy">Carregando lançamentos…</p>}{screenState === 'empty' && <p className="state-copy">Você ainda não tem lançamentos.</p>}{entries.slice(0, 5).map((entry) => <div className="transaction" key={entry.id}><span className={`transaction-icon ${entry.type === 'credit' ? 'in' : 'out'}`}>{entry.type === 'credit' ? '↙' : '↗'}</span><div><strong>{entry.description}</strong><small>{entry.businessDate} · {entry.type}</small></div><b className={entry.type === 'credit' ? 'positive' : ''}>{entry.type === 'credit' ? '+' : '−'} {currency.format(entry.amount)}</b></div>)}</section></>}
-    {formOpen && <div className="modal-backdrop"><form className="entry-form" onSubmit={createEntry} aria-label="Novo lançamento"><h2>Novo lançamento</h2><label>Valor<input name="amount" type="number" step="0.01" min="0.01" required /></label><label>Tipo<select name="type" defaultValue="credit"><option value="credit">Crédito</option><option value="debit">Débito</option></select></label><label>Descrição<input name="description" required /></label><label>Data<input name="businessDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label><div className="form-actions"><button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button><button className="primary" disabled={saving}>{saving ? 'Salvando…' : 'Salvar lançamento'}</button></div>{saved && <StatusBanner tone="success">Lançamento salvo.</StatusBanner>}</form></div>}
+    {formOpen && <div className="modal-backdrop"><form className="entry-form" onSubmit={createEntry} aria-label="Novo lançamento"><h2>Novo lançamento</h2><label>Valor<input name="amount" type="number" step="0.01" min="0.01" required /></label><label>Tipo<select name="type" defaultValue="credit"><option value="credit">Crédito</option><option value="debit">Débito</option></select></label><label>Descrição<input name="description" required /></label><label>Data<input name="businessDate" type="date" defaultValue={currentBusinessDate()} /></label><div className="form-actions"><button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button><button className="primary" disabled={saving}>{saving ? 'Salvando…' : 'Salvar lançamento'}</button></div>{saved && <StatusBanner tone="success">Lançamento salvo.</StatusBanner>}</form></div>}
   </main>
 }
 
