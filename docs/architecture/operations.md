@@ -8,6 +8,17 @@
 - Payloads inválidos não são reentregues; são encaminhados à DLQ.
 - A DLQ deve ser inspecionada pelo operador antes de qualquer reprocessamento.
 
+### Reprocessamento manual controlado
+
+1. Abra `http://localhost:15672` com o usuário local `admin`.
+2. Em **Queues and Streams**, abra `cashflow.summary.dlq` e inspecione a mensagem e o motivo da falha.
+3. Corrija a causa antes de republicar. Não reprocesse payloads inválidos sem alteração.
+4. Use **Get Message(s)** com `Ack Mode = Nack message requeue true` para devolver a mensagem à fila somente durante a inspeção, ou publique uma cópia corrigida no exchange `cashflow.ledger` com a routing key do evento.
+5. Confirme que o Summary aplicou a projeção e somente então reconheça/remova a mensagem original da DLQ.
+6. Verifique a Inbox, o consolidado diário e os logs de `summary.projection.applied`.
+
+Esse fluxo é deliberadamente manual no ambiente do teste. Em produção, deve ser substituído por uma operação autenticada, auditada e com limite de tentativas.
+
 Para inspecionar localmente:
 
 ```powershell
