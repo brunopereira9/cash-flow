@@ -107,6 +107,7 @@ O ambiente de infraestrutura possui instruções adicionais em [`infra/README.md
 
 ## Documentação arquitetural
 
+- [Checklist de conformidade](docs/checklist-conformidade.md)
 - [C4 nível 1 — contexto](docs/architecture/c4-context.md)
 - [C4 nível 2 — containers](docs/architecture/c4-containers.md)
 - [C4 nível 3 — componentes do Core](docs/architecture/c4-components-core.md)
