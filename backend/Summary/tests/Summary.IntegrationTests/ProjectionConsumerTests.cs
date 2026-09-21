@@ -13,13 +13,13 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
 {
     public bool Available { get; init; } = true;
     public string? RabbitUri { get; init; }
-    private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-summary-{Guid.NewGuid():N}.db");
+    public string DatabasePath { get; init; } = Path.Combine(Path.GetTempPath(), $"cashflow-summary-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Summary:Available", Available.ToString());
         builder.UseSetting("Database:Provider", "Sqlite");
-        builder.UseSetting("ConnectionStrings:Summary", $"Data Source={database}");
+        builder.UseSetting("ConnectionStrings:Summary", $"Data Source={DatabasePath}");
         builder.UseSetting("RabbitMq:Enabled", (!string.IsNullOrWhiteSpace(RabbitUri)).ToString());
         if (!string.IsNullOrWhiteSpace(RabbitUri)) builder.UseSetting("RabbitMq:Uri", RabbitUri);
     }
