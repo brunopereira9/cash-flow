@@ -14,6 +14,7 @@ public sealed class CoreDbContext(DbContextOptions<CoreDbContext> options) : DbC
     {
         model.Entity<LedgerEntry>().HasKey(x => x.Id);
         model.Entity<LedgerEntry>().Property(x => x.Amount).HasPrecision(18, 2);
+        model.Entity<LedgerEntry>().Property(x => x.Version).IsConcurrencyToken();
         model.Entity<AuditRecord>().HasKey(x => x.Id);
         model.Entity<CreationAttempt>().HasKey(x => x.Id);
         model.Entity<CreationAttempt>().HasIndex(x => new { x.ActorId, x.Key }).IsUnique();

@@ -4,6 +4,7 @@ using OpenTelemetry.Context.Propagation;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Summary.Api.Domain.Events;
+using Summary.Api.Application.Services;
 using Summary.Api.Infrastructure.Persistence;
 
 namespace Summary.Api.Infrastructure.Messaging;
@@ -13,6 +14,11 @@ public sealed class RabbitSummaryConsumer(
     IConfiguration configuration,
     ILogger<RabbitSummaryConsumer> logger) : BackgroundService
 {
+    private const string Exchange = "cashflow.ledger";
+    private const string DeadLetterExchange = "cashflow.ledger.dlx";
+    private const string Queue = "cashflow.summary";
+    private const string DeadLetterQueue = "cashflow.summary.dlq";
+
     private IConnection? connection;
     private IModel? channel;
 
@@ -43,9 +49,21 @@ public sealed class RabbitSummaryConsumer(
         };
         connection = factory.CreateConnection();
         channel = connection.CreateModel();
-        channel.ExchangeDeclare("cashflow.ledger", ExchangeType.Topic, durable: true);
-        channel.QueueDeclare("cashflow.summary", durable: true, exclusive: false, autoDelete: false);
-        channel.QueueBind("cashflow.summary", "cashflow.ledger", "#");
+        channel.ExchangeDeclare(Exchange, ExchangeType.Topic, durable: true);
+        channel.ExchangeDeclare(DeadLetterExchange, ExchangeType.Topic, durable: true);
+        channel.QueueDeclare(DeadLetterQueue, durable: true, exclusive: false, autoDelete: false);
+        channel.QueueBind(DeadLetterQueue, DeadLetterExchange, DeadLetterQueue);
+        channel.QueueDeclare(
+            Queue,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object>
+            {
+                ["x-dead-letter-exchange"] = DeadLetterExchange,
+                ["x-dead-letter-routing-key"] = DeadLetterQueue,
+            });
+        channel.QueueBind(Queue, Exchange, "#");
         channel.BasicQos(0, 1, false);
         var activeChannel = channel;
         var consumer = new AsyncEventingBasicConsumer(activeChannel);
@@ -66,12 +84,24 @@ public sealed class RabbitSummaryConsumer(
             activity?.SetTag("messaging.destination.name", "cashflow.summary");
             activity?.SetTag("messaging.operation.type", "process");
             activity?.SetTag("messaging.message.id", delivery.BasicProperties?.MessageId);
+            ProjectionEvent message;
             try
             {
-                var message =
-                    JsonSerializer.Deserialize<ProjectionEvent>(Encoding.UTF8.GetString(delivery.Body.ToArray()),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
-                    throw new InvalidOperationException("Invalid ledger event");
+                message = JsonSerializer.Deserialize<ProjectionEvent>(
+                              Encoding.UTF8.GetString(delivery.Body.ToArray()),
+                              new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                          ?? throw new InvalidOperationException("Invalid ledger event");
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+            {
+                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, exception.Message);
+                logger.LogError(exception, "Invalid ledger event; sending to dead-letter queue");
+                activeChannel.BasicNack(delivery.DeliveryTag, false, false);
+                return;
+            }
+
+            try
+            {
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ProjectionService>().ApplyAsync(message, token);
                 logger.LogInformation("Business event {BusinessEvent} processed with {MessageId}",
@@ -85,6 +115,6 @@ public sealed class RabbitSummaryConsumer(
                 activeChannel.BasicNack(delivery.DeliveryTag, false, true);
             }
         };
-        activeChannel.BasicConsume("cashflow.summary", false, consumer);
+        activeChannel.BasicConsume(Queue, false, consumer);
     }
 }

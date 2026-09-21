@@ -23,7 +23,7 @@ public sealed class SummarySwaggerExamplesOperationFilter : IOperationFilter
             healthContent.Examples["default"] = new OpenApiExample
             {
                 Value = new OpenApiObject
-                    { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("summary") }
+                { ["status"] = new OpenApiString("ok"), ["service"] = new OpenApiString("summary") }
             };
         if (path == "summary/daily/{date}")
         {

@@ -1,0 +1,63 @@
+{
+  "rabbit_version": "3.13.7",
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "queues": [
+    {
+      "name": "cashflow.summary",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "cashflow.ledger.dlx",
+        "x-dead-letter-routing-key": "cashflow.summary.dlq"
+      }
+    },
+    {
+      "name": "cashflow.summary.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "cashflow.ledger",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "cashflow.ledger.dlx",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "cashflow.ledger",
+      "vhost": "/",
+      "destination": "cashflow.summary",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {}
+    },
+    {
+      "source": "cashflow.ledger.dlx",
+      "vhost": "/",
+      "destination": "cashflow.summary.dlq",
+      "destination_type": "queue",
+      "routing_key": "cashflow.summary.dlq",
+      "arguments": {}
+    }
+  ]
+}

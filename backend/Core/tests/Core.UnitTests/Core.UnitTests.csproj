@@ -20,4 +20,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Identity\CashFlow.BuildingBlocks.Identity.csproj" />
+  </ItemGroup>
+
 </Project>

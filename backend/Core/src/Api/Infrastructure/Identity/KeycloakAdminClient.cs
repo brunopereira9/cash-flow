@@ -33,7 +33,7 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
         CancellationToken cancellationToken)
     {
         var payload = JsonSerializer.Serialize(new
-            { username = request.Username, email = request.Email, enabled = request.Enabled, emailVerified = false });
+        { username = request.Username, email = request.Email, enabled = request.Enabled, emailVerified = false });
         using var response = await SendAsync(HttpMethod.Post, "users",
             new StringContent(payload, Encoding.UTF8, "application/json"), cancellationToken);
         if (response.StatusCode == System.Net.HttpStatusCode.Conflict) return null;
@@ -68,6 +68,17 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
 
         if (!response.IsSuccessStatusCode) return false;
 
+        var currentRoles = await RealmRolesAsync(id, cancellationToken);
+        if (currentRoles.Count > 0)
+        {
+            using var removeRolesResponse = await SendAsync(
+                HttpMethod.Delete,
+                $"users/{Uri.EscapeDataString(id)}/role-mappings/realm",
+                new StringContent(JsonSerializer.Serialize(currentRoles), Encoding.UTF8, "application/json"),
+                cancellationToken);
+            if (!removeRolesResponse.IsSuccessStatusCode) return false;
+        }
+
         var role = await RoleAsync(request.Role, cancellationToken);
 
         using var roleResponse = await SendAsync(HttpMethod.Post,
@@ -81,22 +92,28 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
     {
         using var response =
             await SendAsync(HttpMethod.Get, $"roles/{Uri.EscapeDataString(role)}", null, cancellationToken);
-        
+
         response.EnsureSuccessStatusCode();
-        
+
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        
+
         return document.RootElement.Clone();
     }
 
     private async Task<HashSet<string>> RolesAsync(string id, CancellationToken cancellationToken)
     {
+        var roles = await RealmRolesAsync(id, cancellationToken);
+        return roles.Select(item => item.GetProperty("name").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private async Task<List<JsonElement>> RealmRolesAsync(string id, CancellationToken cancellationToken)
+    {
         using var response = await SendAsync(HttpMethod.Get, $"users/{Uri.EscapeDataString(id)}/role-mappings/realm",
             null, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        return document.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()!)
-            .ToHashSet(StringComparer.Ordinal);
+        return document.RootElement.EnumerateArray().Select(item => item.Clone()).ToList();
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content,
@@ -124,7 +141,9 @@ public sealed class KeycloakAdminClient(IHttpClientFactory clients, IConfigurati
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    ["grant_type"] = "client_credentials", ["client_id"] = clientId, ["client_secret"] = clientSecret
+                    ["grant_type"] = "client_credentials",
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret
                 })
             };
         using var response = await client.SendAsync(request, cancellationToken);

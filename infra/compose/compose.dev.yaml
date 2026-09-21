@@ -1,0 +1,65 @@
+services:
+  dev-restore:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /workspace/backend
+    command: ["sh", "-c", "dotnet restore Core/src/Api/Core.Api.csproj && dotnet restore Summary/src/Api/Summary.Api.csproj"]
+    volumes:
+      - ../../backend:/workspace/backend
+      - core-nuget:/root/.nuget/packages
+    restart: "no"
+
+  core:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /workspace/backend
+    command: ["dotnet", "watch", "--project", "Core/src/Api/Core.Api.csproj", "run", "--no-restore", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    volumes:
+      - ../../backend:/workspace/backend
+      - core-nuget:/root/.nuget/packages
+    ports:
+      - "5080:8080"
+      - "5005:5005"
+    healthcheck:
+      disable: true
+    depends_on:
+      dev-restore: { condition: service_completed_successfully }
+
+  summary:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /workspace/backend
+    command: ["dotnet", "watch", "--project", "Summary/src/Api/Summary.Api.csproj", "run", "--no-restore", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    volumes:
+      - ../../backend:/workspace/backend
+      - summary-nuget:/root/.nuget/packages
+    ports:
+      - "5081:8080"
+      - "5006:5006"
+    healthcheck:
+      disable: true
+    depends_on:
+      dev-restore: { condition: service_completed_successfully }
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /workspace/front
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../../front:/workspace/front
+      - frontend-node-modules:/workspace/front/node_modules
+    ports: !override ["5173:5173"]
+    healthcheck:
+      disable: true
+
+volumes:
+  core-nuget:
+  summary-nuget:
+  frontend-node-modules:

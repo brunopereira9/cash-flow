@@ -23,8 +23,48 @@ O Compose cria os bancos no PostgreSQL, executa as migrations das APIs e aguarda
 - Core API: <http://localhost:5080>
 - Summary API: <http://localhost:5081>
 - Keycloak: <http://localhost:18081>
+- RabbitMQ Management: <http://localhost:15672> (`admin` / `admin`)
 
 Usuários de desenvolvimento do Keycloak usam a senha `username123`. Para acessar as funcionalidades protegidas, use o usuário `demo-operator`.
+
+### Gerar token para usar as APIs
+
+Obtenha um token de acesso no Keycloak usando o fluxo de senha disponível somente no ambiente local:
+
+```powershell
+$tokenResponse = Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
+  -ContentType "application/x-www-form-urlencoded" `
+  -Body @{
+    grant_type = "password"
+    client_id = "cashflow-front"
+    username = "demo-operator"
+    password = "username123"
+  }
+
+$token = $tokenResponse.access_token
+```
+
+Use o token como `Bearer` nas chamadas autenticadas. Por exemplo:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://localhost:5080/ledger/entries" `
+  -Headers @{ Authorization = "Bearer $token" }
+
+Invoke-RestMethod `
+  -Uri "http://localhost:5081/summary/daily/2026-09-20" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+O token também pode ser gerado com `curl`:
+
+```powershell
+curl.exe -X POST "http://localhost:18081/realms/cashflow/protocol/openid-connect/token" `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  -d "grant_type=password&client_id=cashflow-front&username=demo-operator&password=username123"
+```
 
 Para verificar se as APIs estão prontas:
 
@@ -65,10 +105,52 @@ O ambiente de infraestrutura possui instruções adicionais em [`infra/README.md
 
 ## Comandos disponíveis
 
+## Documentação arquitetural
+
+- [Checklist de conformidade](docs/checklist-conformidade.md)
+- [C4 nível 1 — contexto](docs/architecture/c4-context.md)
+- [C4 nível 2 — containers](docs/architecture/c4-containers.md)
+- [C4 nível 3 — componentes do Core](docs/architecture/c4-components-core.md)
+- [Decisões arquiteturais e trade-offs](docs/architecture/decisions.md)
+- [Operação, retry, DLQ e teste de carga](docs/architecture/operations.md)
+
 ```powershell
 dotnet build backend/CashFlow.slnx
 dotnet test backend/CashFlow.slnx
 cd front; npm install; npm run build
 ```
+
+## Executar os testes
+
+Restaure as dependências e compile a solução antes de executar a suíte:
+
+```powershell
+dotnet restore backend/CashFlow.slnx
+dotnet build backend/CashFlow.slnx --no-restore
+```
+
+Testes unitários e contratos arquiteturais:
+
+```powershell
+dotnet test backend/Core/tests/Core.UnitTests/Core.UnitTests.csproj --no-restore
+dotnet test backend/tests/ArchitectureTests/ArchitectureTests.csproj --no-restore
+```
+
+Testes de integração devem ser executados separadamente para evitar disputa por portas, containers e recursos do Docker:
+
+```powershell
+dotnet test backend/Core/tests/Core.IntegrationTests/Core.IntegrationTests.csproj --no-restore
+dotnet test backend/Summary/tests/Summary.IntegrationTests/Summary.IntegrationTests.csproj --no-restore
+```
+
+Os testes de integração do Summary criam um container RabbitMQ temporário e, portanto, exigem o Docker Desktop em execução. A fixture usa as credenciais locais `integration/integration` e remove o container ao final.
+
+Para executar tudo de uma vez:
+
+```powershell
+dotnet test backend/CashFlow.slnx --no-restore
+```
+
+Essa forma é útil para uma verificação rápida, mas a execução separada dos projetos de integração é mais previsível em máquinas com recursos limitados. Os testes de timeout do Keycloak dependem do tempo de inicialização do `TestServer` e podem apresentar variação quando todos os assemblies são executados simultaneamente.
 
 Os serviços de infraestrutura, migrations e testes de comportamento são mantidos nas pastas `infra/`, `backend/` e `front/`.

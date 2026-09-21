@@ -12,6 +12,11 @@ public sealed class RabbitOutboxRelay(
     IConfiguration configuration,
     ILogger<RabbitOutboxRelay> logger) : BackgroundService
 {
+    private const string Exchange = "cashflow.ledger";
+    private const string DeadLetterExchange = "cashflow.ledger.dlx";
+    private const string Queue = "cashflow.summary";
+    private const string DeadLetterQueue = "cashflow.summary.dlq";
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue("RabbitMq:Enabled", false)) return;
@@ -35,14 +40,18 @@ public sealed class RabbitOutboxRelay(
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CoreDbContext>();
+        if ((await db.Database.GetPendingMigrationsAsync(token)).Any())
+            return;
+
+        var factory = new ConnectionFactory
+        { Uri = new Uri(configuration["RabbitMq:Uri"] ?? "amqp://guest:guest@rabbitmq:5672/") };
+        using var connection = factory.CreateConnection();
+        using var channel = connection.CreateModel();
+        DeclareTopology(channel);
+
         var pending = (await db.OutboxEvents.Where(x => x.PublishedAt == null).ToListAsync(token))
             .OrderBy(x => x.OccurredAt).Take(50).ToList();
         if (pending.Count == 0) return;
-        var factory = new ConnectionFactory
-            { Uri = new Uri(configuration["RabbitMq:Uri"] ?? "amqp://guest:guest@rabbitmq:5672/") };
-        using var connection = factory.CreateConnection();
-        using var channel = connection.CreateModel();
-        channel.ExchangeDeclare("cashflow.ledger", ExchangeType.Topic, durable: true);
         channel.ConfirmSelect();
         foreach (var message in pending)
         {
@@ -61,7 +70,7 @@ public sealed class RabbitOutboxRelay(
                 new PropagationContext(activity?.Context ?? System.Diagnostics.Activity.Current?.Context ?? default,
                     Baggage.Current), properties.Headers,
                 static (headers, key, value) => headers[key] = Encoding.UTF8.GetBytes(value));
-            channel.BasicPublish("cashflow.ledger", message.Name, properties, Encoding.UTF8.GetBytes(message.Payload));
+            channel.BasicPublish(Exchange, message.Name, mandatory: true, properties, Encoding.UTF8.GetBytes(message.Payload));
             channel.WaitForConfirmsOrDie(TimeSpan.FromSeconds(5));
             message.PublishedAt = DateTimeOffset.UtcNow;
             CashFlowCoreTelemetry.OutboxPublished.Add(1);
@@ -70,5 +79,24 @@ public sealed class RabbitOutboxRelay(
         }
 
         await db.SaveChangesAsync(token);
+    }
+
+    private static void DeclareTopology(IModel channel)
+    {
+        channel.ExchangeDeclare(Exchange, ExchangeType.Topic, durable: true);
+        channel.ExchangeDeclare(DeadLetterExchange, ExchangeType.Topic, durable: true);
+        channel.QueueDeclare(DeadLetterQueue, durable: true, exclusive: false, autoDelete: false);
+        channel.QueueBind(DeadLetterQueue, DeadLetterExchange, DeadLetterQueue);
+        channel.QueueDeclare(
+            Queue,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object>
+            {
+                ["x-dead-letter-exchange"] = DeadLetterExchange,
+                ["x-dead-letter-routing-key"] = DeadLetterQueue,
+            });
+        channel.QueueBind(Queue, Exchange, "#");
     }
 }

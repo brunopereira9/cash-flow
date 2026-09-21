@@ -3,6 +3,7 @@ import { check, fail, sleep } from 'k6'
 import { Rate, Trend } from 'k6/metrics'
 
 const summaryUrl = __ENV.SUMMARY_URL || 'http://summary:8080'
+const coreUrl = __ENV.CORE_URL || 'http://core:8080'
 const keycloakUrl = __ENV.KEYCLOAK_URL || 'http://keycloak:8080'
 const businessDate = __ENV.SUMMARY_DATE || '2026-09-19'
 const entryCount = Number(__ENV.SEED_ENTRY_COUNT || 1000)
@@ -37,6 +38,25 @@ function summaryRequest(authorization) {
   })
 }
 
+function createEntry(authorization, runId, index, amount, type) {
+  return http.post(
+    `${coreUrl}/ledger/entries`,
+    JSON.stringify({
+      amount,
+      type,
+      description: `FC12 concentrated seed ${index + 1}`,
+      businessDate,
+    }),
+    {
+      headers: {
+        Authorization: authorization,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': guid(runId, index, '1'),
+      },
+    },
+  )
+}
+
 function requireCurrentSummary(response, label) {
   const valid = check(response, {
     [`${label} returns 200`]: (result) => result.status === 200,
@@ -44,6 +64,19 @@ function requireCurrentSummary(response, label) {
   })
   if (!valid) fail(`${label} could not read a current daily summary: ${response.status} ${response.body}`)
   return response.json()
+}
+
+function waitForSeededSummary(authorization, before, expected) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const current = requireCurrentSummary(summaryRequest(authorization), 'seeded summary')
+    if (current.credits - before.credits === expected.credits &&
+        current.debits - before.debits === expected.debits &&
+        current.balance - before.balance === expected.balance) {
+      return current
+    }
+    sleep(1)
+  }
+  fail('seeded summary did not converge within 60 seconds')
 }
 
 function accessToken() {
@@ -78,36 +111,18 @@ export function setup() {
     expected.credits += credit ? amount : 0
     expected.debits += credit ? 0 : amount
     expected.balance += credit ? amount : -amount
-    const response = http.post(
-      `${summaryUrl}/internal/events`,
-      JSON.stringify({
-        eventId: guid(runId, index, '1'),
-        name: 'LedgerEntryCreated.v1',
-        version: 1,
-        entry: {
-          id: guid(runId, index, '2'),
-          amount,
-          type: credit ? 'credit' : 'debit',
-          description: `FC12 concentrated seed ${index + 1}`,
-          businessDate,
-          version: 1,
-          deleted: false,
-        },
-      }),
-      { headers: { 'Content-Type': 'application/json' } },
-    )
-    if (!check(response, { 'concentrated seed event is accepted': (result) => result.status === 202 })) {
-      fail(`seed event ${index + 1} was not accepted: ${response.status} ${response.body}`)
+    const response = createEntry(authorization, runId, index, amount, credit ? 'credit' : 'debit')
+    if (!check(response, { 'concentrated seed entry is created': (result) => result.status === 201 })) {
+      fail(`seed entry ${index + 1} was not created: ${response.status} ${response.body}`)
     }
   }
 
-  const after = requireCurrentSummary(summaryRequest(authorization), 'seeded summary')
-  const seeded = check(null, {
+  const after = waitForSeededSummary(authorization, before, expected)
+  check(null, {
     'concentrated seed increases credits': () => after.credits - before.credits === expected.credits,
     'concentrated seed increases debits': () => after.debits - before.debits === expected.debits,
     'concentrated seed increases balance': () => after.balance - before.balance === expected.balance,
   })
-  if (!seeded) fail(`concentrated seed totals are wrong: ${JSON.stringify({ before, after, expected })}`)
 
   console.log(`FC12 seeded ${entryCount} entries on ${businessDate}: +${expected.credits} credits, +${expected.debits} debits, +${expected.balance} balance.`)
   return { authorization }

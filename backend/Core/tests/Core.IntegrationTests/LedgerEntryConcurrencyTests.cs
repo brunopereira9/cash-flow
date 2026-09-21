@@ -9,30 +9,93 @@ public class LedgerEntryConcurrencyTests : IClassFixture<CoreApiFactory>
 {
     private readonly HttpClient client;
     private readonly CoreApiFactory factory;
-    public LedgerEntryConcurrencyTests(CoreApiFactory factory) { this.factory = factory; client = factory.CreateClient(); }
+
+    public LedgerEntryConcurrencyTests(CoreApiFactory factory)
+    {
+        this.factory = factory;
+        client = factory.CreateClient();
+    }
 
     [Fact]
     public async Task RejectsStaleVersionWithoutSideEffects()
     {
         var key = Guid.NewGuid().ToString("N");
-        using var create = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries") { Content = JsonContent.Create(new { amount = 10m, type = "credit", description = "Concurrency" }) };
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
+        {
+            Content = JsonContent.Create(new
+            {
+                amount = 10m,
+                type = "credit",
+                description = "Concurrency"
+            })
+        };
         create.Headers.Add("Idempotency-Key", key);
         create.Headers.Add("X-Actor-Id", "concurrency-actor");
         var created = await client.SendAsync(create);
         var entry = await created.Content.ReadFromJsonAsync<JsonElement>();
         var id = entry.GetProperty("id").GetGuid();
-        var update = await SendAsync(HttpMethod.Put, $"/ledger/entries/{id}", new { amount = 11m, type = "credit", description = "Concurrency", version = 1 }, "update-correlation");
+        var update = await SendAsync(
+            HttpMethod.Put,
+            $"/ledger/entries/{id}",
+            new
+            {
+                amount = 11m,
+                type = "credit",
+                description = "Concurrency",
+                version = 1
+            },
+            "update-correlation");
         var beforeStale = await ReadCountsAsync();
-        var stale = await SendAsync(HttpMethod.Put, $"/ledger/entries/{id}", new { amount = 12m, type = "credit", description = "Concurrency", version = 1 }, "stale-put-correlation");
+        var stale = await SendAsync(
+            HttpMethod.Put,
+            $"/ledger/entries/{id}",
+            new
+            {
+                amount = 12m,
+                type = "credit",
+                description = "Concurrency",
+                version = 1
+            },
+            "stale-put-correlation");
         var staleDelete = await client.DeleteAsync($"/ledger/entries/{id}?version=1");
         var afterStale = await ReadCountsAsync();
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, staleDelete.StatusCode);
-        var current = (await (await client.GetAsync("/ledger/entries")).Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == id);
+        var currentResponse = await client.GetAsync("/ledger/entries");
+        var currentEntries = await currentResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var current = currentEntries
+            .EnumerateArray()
+            .Single(entry => entry.GetProperty("id").GetGuid() == id);
         Assert.Equal(11m, current.GetProperty("amount").GetDecimal());
         Assert.Equal(2, current.GetProperty("version").GetInt32());
         Assert.Equal(beforeStale, afterStale);
+    }
+
+    [Fact]
+    public async Task ConcurrentCreationWithSameKeyReturnsOneEntry()
+    {
+        var key = Guid.NewGuid().ToString("N");
+        var payload = new { amount = 17m, type = "credit", description = "same-key" };
+        var responses = await Task.WhenAll(
+            PostAsync(payload, key, "concurrent-create"),
+            PostAsync(payload, key, "concurrent-create"));
+
+        Assert.All(responses, response => Assert.Contains(response.StatusCode,
+            new[] { HttpStatusCode.Created, HttpStatusCode.OK }));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Created));
+        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
+    }
+
+    private async Task<HttpResponseMessage> PostAsync(object payload, string key, string actor)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/ledger/entries")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        request.Headers.Add("Idempotency-Key", key);
+        request.Headers.Add("X-Actor-Id", actor);
+        return await client.SendAsync(request);
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string uri, object payload, string correlation)

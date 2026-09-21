@@ -13,13 +13,13 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
 {
     public bool Available { get; init; } = true;
     public string? RabbitUri { get; init; }
-    private readonly string database = Path.Combine(Path.GetTempPath(), $"cashflow-summary-{Guid.NewGuid():N}.db");
+    public string DatabasePath { get; init; } = Path.Combine(Path.GetTempPath(), $"cashflow-summary-{Guid.NewGuid():N}.db");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Summary:Available", Available.ToString());
         builder.UseSetting("Database:Provider", "Sqlite");
-        builder.UseSetting("ConnectionStrings:Summary", $"Data Source={database}");
+        builder.UseSetting("ConnectionStrings:Summary", $"Data Source={DatabasePath}");
         builder.UseSetting("RabbitMq:Enabled", (!string.IsNullOrWhiteSpace(RabbitUri)).ToString());
         if (!string.IsNullOrWhiteSpace(RabbitUri)) builder.UseSetting("RabbitMq:Uri", RabbitUri);
     }
@@ -39,7 +39,8 @@ public class SummaryApiFactory : MigratedSummaryApiFactory
     }
 }
 
-public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
+[Collection("RabbitMQ integration")]
+public class ProjectionConsumerTests
 {
     private readonly RabbitMqFixture rabbit;
     public ProjectionConsumerTests(RabbitMqFixture rabbit) => this.rabbit = rabbit;
@@ -87,7 +88,7 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         using var update = new HttpRequestMessage(HttpMethod.Put, $"/ledger/entries/{entryId}")
         {
             Content = JsonContent.Create(new
-                { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 })
+            { amount = 40m, type = "credit", description = "updated", businessDate, version = 1 })
         };
         update.Headers.Add("X-Actor-Id", "rabbit-actor");
         var updated = await coreClient.SendAsync(update);
@@ -98,10 +99,17 @@ public class ProjectionConsumerTests : IClassFixture<RabbitMqFixture>
         var obsolete = await summaryClient.PostAsJsonAsync("/internal/events",
             new
             {
-                eventId = Guid.NewGuid(), name = "LedgerEntryUpdated.v1", version = 1,
+                eventId = Guid.NewGuid(),
+                name = "LedgerEntryUpdated.v1",
+                version = 1,
                 entry = new
                 {
-                    id = entryId, amount = 99m, type = "credit", description = "obsolete", businessDate, version = 1,
+                    id = entryId,
+                    amount = 99m,
+                    type = "credit",
+                    description = "obsolete",
+                    businessDate,
+                    version = 1,
                     deleted = false
                 }
             });
