@@ -66,6 +66,19 @@ function requireCurrentSummary(response, label) {
   return response.json()
 }
 
+function waitForSeededSummary(authorization, before, expected) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const current = requireCurrentSummary(summaryRequest(authorization), 'seeded summary')
+    if (current.credits - before.credits === expected.credits &&
+        current.debits - before.debits === expected.debits &&
+        current.balance - before.balance === expected.balance) {
+      return current
+    }
+    sleep(1)
+  }
+  fail('seeded summary did not converge within 60 seconds')
+}
+
 function accessToken() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const response = http.post(
@@ -104,13 +117,12 @@ export function setup() {
     }
   }
 
-  const after = requireCurrentSummary(summaryRequest(authorization), 'seeded summary')
-  const seeded = check(null, {
+  const after = waitForSeededSummary(authorization, before, expected)
+  check(null, {
     'concentrated seed increases credits': () => after.credits - before.credits === expected.credits,
     'concentrated seed increases debits': () => after.debits - before.debits === expected.debits,
     'concentrated seed increases balance': () => after.balance - before.balance === expected.balance,
   })
-  if (!seeded) fail(`concentrated seed totals are wrong: ${JSON.stringify({ before, after, expected })}`)
 
   console.log(`FC12 seeded ${entryCount} entries on ${businessDate}: +${expected.credits} credits, +${expected.debits} debits, +${expected.balance} balance.`)
   return { authorization }
