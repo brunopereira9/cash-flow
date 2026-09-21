@@ -11,7 +11,7 @@ public sealed class LedgerService(ILedgerRepository repository)
 
     public IReadOnlyDictionary<string, string[]> Validate(UpdateEntryRequest request) => EntryValidator.Validate(request);
 
-    public Task<LedgerEntry?> FindByIdempotencyAsync(string actor, string key, CancellationToken token) =>
+    public Task<CreationAttempt?> FindByIdempotencyAsync(string actor, string key, CancellationToken token) =>
         repository.FindByIdempotencyAsync(actor, key, token);
 
     public Task<LedgerEntry?> FindAsync(Guid id, CancellationToken token) => repository.FindAsync(id, token);

@@ -19,7 +19,10 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         var actor = Actor();
         var date = request.BusinessDate ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "America/Sao_Paulo"));
         var old = await service.FindByIdempotencyAsync(actor, key!, token);
-        if (old is not null) return Ok(old);
+        if (old is not null)
+            return string.Equals(old.Intent, Intent(request.Amount, request.Type!, request.Description!, date), StringComparison.Ordinal)
+                ? Ok(old.Entry)
+                : Conflict(new { code = "idempotency_key_reused" });
         var entry = new Domain.Entities.LedgerEntry(Guid.NewGuid(), request.Amount, request.Type!, request.Description!, date, 1, false);
         try
         {
@@ -28,7 +31,10 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
         catch (DbUpdateException)
         {
             var concurrent = await service.FindByIdempotencyAsync(actor, key!, token);
-            if (concurrent is not null) return Ok(concurrent);
+            if (concurrent is not null)
+                return string.Equals(concurrent.Intent, Intent(request.Amount, request.Type!, request.Description!, date), StringComparison.Ordinal)
+                    ? Ok(concurrent.Entry)
+                    : Conflict(new { code = "idempotency_key_reused" });
             throw;
         }
         logger.LogInformation("Business event {BusinessEvent} published with {EntryId}", "ledger.entry.created", entry.Id);
@@ -85,4 +91,6 @@ public sealed class LedgerController(LedgerService service, ILogger<LedgerContro
 
     private string Actor() => User.FindFirst("sub")?.Value ?? "system";
     private string Correlation() => Response.Headers["X-Correlation-Id"].FirstOrDefault() ?? Guid.NewGuid().ToString("N");
+    private static string Intent(decimal amount, string type, string description, DateOnly date) =>
+        $"{amount.ToString(System.Globalization.CultureInfo.InvariantCulture)}|{type}|{description}|{date:yyyy-MM-dd}";
 }

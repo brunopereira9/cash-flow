@@ -7,8 +7,9 @@ namespace Core.Api.Infrastructure.Persistence;
 
 public sealed class LedgerRepository(CoreDbContext db, LedgerMutationFactory mutations) : ILedgerRepository
 {
-    public async Task<LedgerEntry?> FindByIdempotencyAsync(string actor, string key, CancellationToken token) =>
-        (await db.CreationAttempts.Include(x => x.Entry).SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token))?.Entry;
+    public Task<CreationAttempt?> FindByIdempotencyAsync(string actor, string key, CancellationToken token) =>
+        db.CreationAttempts.Include(x => x.Entry)
+            .SingleOrDefaultAsync(x => x.ActorId == actor && x.Key == key, token);
 
     public Task<LedgerEntry?> FindAsync(Guid id, CancellationToken token) =>
         db.LedgerEntries.SingleOrDefaultAsync(entry => entry.Id == id, token);
