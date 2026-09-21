@@ -25,7 +25,8 @@ public static class CurrentKeycloakAuthorizationApplicationBuilderExtensions
         if (!configuration.GetValue("Keycloak:Enabled", false)) return app;
         return app.Use(async (context, next) =>
         {
-            if (!context.Request.Path.StartsWithSegments("/summary"))
+            if (!context.Request.Path.StartsWithSegments("/summary") &&
+                !context.Request.Path.StartsWithSegments("/internal/events"))
             {
                 await next();
                 return;

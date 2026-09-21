@@ -3,6 +3,7 @@ import { check, fail, sleep } from 'k6'
 import { Rate, Trend } from 'k6/metrics'
 
 const summaryUrl = __ENV.SUMMARY_URL || 'http://summary:8080'
+const coreUrl = __ENV.CORE_URL || 'http://core:8080'
 const keycloakUrl = __ENV.KEYCLOAK_URL || 'http://keycloak:8080'
 const businessDate = __ENV.SUMMARY_DATE || '2026-09-19'
 const entryCount = Number(__ENV.SEED_ENTRY_COUNT || 1000)
@@ -35,6 +36,25 @@ function summaryRequest(authorization) {
   return http.get(`${summaryUrl}/summary/daily/${businessDate}`, {
     headers: { Authorization: authorization },
   })
+}
+
+function createEntry(authorization, runId, index, amount, type) {
+  return http.post(
+    `${coreUrl}/ledger/entries`,
+    JSON.stringify({
+      amount,
+      type,
+      description: `FC12 concentrated seed ${index + 1}`,
+      businessDate,
+    }),
+    {
+      headers: {
+        Authorization: authorization,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': guid(runId, index, '1'),
+      },
+    },
+  )
 }
 
 function requireCurrentSummary(response, label) {
@@ -78,26 +98,9 @@ export function setup() {
     expected.credits += credit ? amount : 0
     expected.debits += credit ? 0 : amount
     expected.balance += credit ? amount : -amount
-    const response = http.post(
-      `${summaryUrl}/internal/events`,
-      JSON.stringify({
-        eventId: guid(runId, index, '1'),
-        name: 'LedgerEntryCreated.v1',
-        version: 1,
-        entry: {
-          id: guid(runId, index, '2'),
-          amount,
-          type: credit ? 'credit' : 'debit',
-          description: `FC12 concentrated seed ${index + 1}`,
-          businessDate,
-          version: 1,
-          deleted: false,
-        },
-      }),
-      { headers: { 'Content-Type': 'application/json' } },
-    )
-    if (!check(response, { 'concentrated seed event is accepted': (result) => result.status === 202 })) {
-      fail(`seed event ${index + 1} was not accepted: ${response.status} ${response.body}`)
+    const response = createEntry(authorization, runId, index, amount, credit ? 'credit' : 'debit')
+    if (!check(response, { 'concentrated seed entry is created': (result) => result.status === 201 })) {
+      fail(`seed entry ${index + 1} was not created: ${response.status} ${response.body}`)
     }
   }
 
