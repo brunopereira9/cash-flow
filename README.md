@@ -105,6 +105,14 @@ O ambiente de infraestrutura possui instruções adicionais em [`infra/README.md
 
 ## Comandos disponíveis
 
+## Documentação arquitetural
+
+- [C4 nível 1 — contexto](docs/architecture/c4-context.md)
+- [C4 nível 2 — containers](docs/architecture/c4-containers.md)
+- [C4 nível 3 — componentes do Core](docs/architecture/c4-components-core.md)
+- [Decisões arquiteturais e trade-offs](docs/architecture/decisions.md)
+- [Operação, retry, DLQ e teste de carga](docs/architecture/operations.md)
+
 ```powershell
 dotnet build backend/CashFlow.slnx
 dotnet test backend/CashFlow.slnx
