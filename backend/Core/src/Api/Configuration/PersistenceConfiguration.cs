@@ -1,3 +1,5 @@
+using Core.Api.Application.Interfaces;
+using Core.Api.Application.Services;
 using Core.Api.Infrastructure;
 using Core.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +27,11 @@ public static class PersistenceConfiguration
         {
             services.AddDbContext<CoreDbContext>(options => options.UseNpgsql(connection));
         }
+
+        services.AddScoped<ILedgerRepository, LedgerRepository>();
+        services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddScoped<LedgerService>();
+        services.AddScoped<AuditService>();
 
         services.AddHealthChecks()
             .AddCheck<DatabaseReadinessCheck<CoreDbContext>>("database");
