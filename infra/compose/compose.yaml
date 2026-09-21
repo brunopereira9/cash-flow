@@ -97,6 +97,9 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports: ["15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: local-rabbitmq-admin
     healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 12 }
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
