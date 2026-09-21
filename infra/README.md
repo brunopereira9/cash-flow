@@ -27,6 +27,8 @@ O runtime das APIs não aplica migrations. Para repetir em um ambiente limpo, ex
 
 Verificar bancos: `docker compose -f infra/compose/compose.yaml exec postgres psql -U cashflow -d postgres -c "\l"`.
 
+O painel do RabbitMQ Management fica disponível em `http://localhost:15672`, usando `guest` / `guest`. Nele é possível acompanhar filas, exchanges, consumidores, mensagens prontas e mensagens não confirmadas.
+
 Reset local destrutivo: `docker compose -f infra/compose/compose.yaml down -v`.
 
 As APIs aceitam somente JWTs emitidos para `cashflow-front`. Em cada chamada de negócio, elas consultam a Admin API do Keycloak com o cliente de serviço `cashflow-api`; indisponibilidade ou timeout de dois segundos responde `503`, e conta desativada ou sem papel `operator` responde `403` mesmo com um JWT ainda válido. Obter um token de desenvolvimento: `curl -X POST http://localhost:18081/realms/cashflow/protocol/openid-connect/token -d "grant_type=password" -d "client_id=cashflow-front" -d "username=demo-operator" -d "password=username123"`.

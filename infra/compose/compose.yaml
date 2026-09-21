@@ -96,6 +96,7 @@ services:
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U cashflow -d postgres"], interval: 10s, timeout: 5s, retries: 12 }
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    ports: ["15672:15672"]
     healthcheck: { test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, timeout: 5s, retries: 12 }
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
