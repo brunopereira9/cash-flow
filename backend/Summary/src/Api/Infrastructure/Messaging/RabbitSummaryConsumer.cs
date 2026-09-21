@@ -4,6 +4,7 @@ using OpenTelemetry.Context.Propagation;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Summary.Api.Domain.Events;
+using Summary.Api.Application.Services;
 using Summary.Api.Infrastructure.Persistence;
 
 namespace Summary.Api.Infrastructure.Messaging;

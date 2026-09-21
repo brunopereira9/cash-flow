@@ -1,12 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using Summary.Api.Application.Interfaces;
 using Summary.Api.Domain.Entities;
 using Summary.Api.Domain.Events;
 
 namespace Summary.Api.Infrastructure.Persistence;
 
-public sealed class ProjectionService(SummaryDbContext db)
+public sealed class SummaryRepository(SummaryDbContext db) : ISummaryRepository
 {
-    public async Task<bool> ApplyAsync(ProjectionEvent message, CancellationToken token)
+    public Task<DailySummary?> FindDailyAsync(DateOnly date, CancellationToken token) =>
+        db.DailySummaries.FindAsync([date], token).AsTask();
+
+    public async Task<bool> ApplyProjectionAsync(ProjectionEvent message, CancellationToken token)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         if (await db.InboxEvents.AnyAsync(x => x.EventId == message.EventId, token))
@@ -43,10 +47,8 @@ public sealed class ProjectionService(SummaryDbContext db)
     private async Task RecalculateAsync(DateOnly date, CancellationToken token)
     {
         var entries = await db.ProjectedEntries.Where(x => x.BusinessDate == date && !x.Deleted).ToListAsync(token);
-        var credits = entries.Where(x => string.Equals(x.Type, "credit", StringComparison.OrdinalIgnoreCase))
-            .Sum(x => x.Amount);
-        var debits = entries.Where(x => string.Equals(x.Type, "debit", StringComparison.OrdinalIgnoreCase))
-            .Sum(x => x.Amount);
+        var credits = entries.Where(x => string.Equals(x.Type, "credit", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount);
+        var debits = entries.Where(x => string.Equals(x.Type, "debit", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount);
         var summary = await db.DailySummaries.FindAsync([date], token);
         if (summary is null) db.DailySummaries.Add(DailySummary.Create(date, credits, debits, DateTimeOffset.UtcNow));
         else summary.Refresh(credits, debits, DateTimeOffset.UtcNow);

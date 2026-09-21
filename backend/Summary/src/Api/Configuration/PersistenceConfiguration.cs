@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Summary.Api.Application.Interfaces;
+using Summary.Api.Application.Services;
 using Summary.Api.Infrastructure;
 using Summary.Api.Infrastructure.Persistence;
 
@@ -25,6 +27,10 @@ public static class PersistenceConfiguration
         {
             services.AddDbContext<SummaryDbContext>(options => options.UseNpgsql(connection));
         }
+
+        services.AddScoped<ISummaryRepository, SummaryRepository>();
+        services.AddScoped<SummaryService>();
+        services.AddScoped<ProjectionService>();
 
         services.AddHealthChecks()
             .AddCheck<SummaryDatabaseReadinessCheck>("database");

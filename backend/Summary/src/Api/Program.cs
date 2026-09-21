@@ -11,7 +11,6 @@ builder.Services.AddSummaryWeb();
 builder.AddSummaryTelemetry();
 builder.Services.AddSummaryAuthentication(builder.Configuration);
 builder.Services.AddSummaryPersistence(builder.Configuration);
-builder.Services.AddScoped<ProjectionService>();
 builder.Services.AddHostedService<RabbitSummaryConsumer>();
 var app = builder.Build();
 app.UseSwagger();
