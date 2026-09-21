@@ -3,6 +3,14 @@
 Comando canônico aguardando dependências saudáveis: `docker compose -f infra/compose/compose.yaml up --build -d --wait`.
 Os jobs de migração usam a opção `--migrate`; os serviços Core e Summary expõem `/readyz`.
 
+Para desenvolvimento com hot reload, use o override abaixo. O backend roda com `dotnet watch`, o frontend com Vite e o código local é montado dentro dos containers:
+
+```powershell
+docker compose -f infra/compose/compose.yaml -f infra/compose/compose.dev.yaml up --build
+```
+
+O Rider pode se conectar aos processos .NET dos containers pela configuração **Attach to Process > Docker**. Os processos do Core e Summary ficam expostos, respectivamente, nas portas `5005` e `5006`; o `dotnet watch` recompila e reinicia o processo quando os arquivos são alterados. Para encerrar o ambiente, pressione `Ctrl+C` ou execute `docker compose -f infra/compose/compose.yaml -f infra/compose/compose.dev.yaml down`.
+
 Configure a chave local do New Relic em `infra/.env.local` (arquivo ignorado pelo Git) usando `NEW_RELIC_LICENSE_KEY`, e suba com `docker compose --env-file infra/.env.local -f infra/compose/compose.yaml up --build -d`. A forma canônica sem credencial externa é `docker compose -f infra/compose/compose.yaml up --build -d`. O OpenTelemetry Collector recebe traces, métricas e logs das APIs via OTLP e exporta para New Relic; a chave não deve ser colocada em arquivos versionados.
 
 Verificar: `curl http://localhost:5080/healthz`, `curl http://localhost:5081/healthz` e aguardar o Compose com `--wait`.
